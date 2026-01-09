@@ -1,8 +1,20 @@
 {
-  "description": "Ralph Loop plugin stop hook for self-referential loops",
+  "description": "Ralph Loop plugin hooks for multi-session support",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-hook.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
