@@ -6,7 +6,7 @@ Standard boilerplate for creating Claude Code plugins with testing, CI/CD, and v
 
 - Standard Structure: Follows anthropics/claude-plugins-official patterns
 - Validation Scripts: JSON, YAML, naming, and path validation
-- BATS Tests: Comprehensive test suite
+- Structure Validation: Plugin structure and component verification
 - CI/CD: GitHub Actions workflows for PR validation and releases
 - Pre-commit Hooks: Automated quality checks
 - Example Plugin: Demonstrates all component types
@@ -17,7 +17,7 @@ Standard boilerplate for creating Claude Code plugins with testing, CI/CD, and v
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/claude-plugin-boilerplate.git
+git clone https://github.com/jito/claude-plugin-boilerplate.git
 cd claude-plugin-boilerplate
 
 # Install as a marketplace
@@ -40,11 +40,11 @@ cp -r plugins/example-plugin plugins/my-plugin
 ### Running Validation
 
 ```bash
+# Run tests
+bash tests/run-tests.sh
+
 # Validate all plugins
 bash scripts/validate-plugin.sh
-
-# Run tests
-bats tests/
 
 # Run pre-commit hooks manually
 pre-commit run --all-files
@@ -66,7 +66,7 @@ claude-plugin-boilerplate/
 │       └── hooks/
 ├── .github/workflows/            # CI/CD workflows
 ├── scripts/                      # Validation scripts
-├── tests/                        # BATS tests
+├── tests/                        # Test scripts
 └── schemas/                      # JSON schemas
 ```
 

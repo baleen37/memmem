@@ -12,13 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install BATS and helpers
+      - name: Install dependencies
         run: |
-          git clone --depth 1 --branch v1.10.0 https://github.com/bats-core/bats-core.git /tmp/bats
-          sudo /tmp/bats/install.sh /usr/local
-          mkdir -p tests/helpers
-          git clone --depth 1 --branch v0.3.0 https://github.com/bats-core/bats-support.git tests/helpers/bats-support
-          git clone --depth 1 --branch v0.3.0 https://github.com/bats-core/bats-assert.git tests/helpers/bats-assert
+          sudo apt-get update
+          sudo apt-get install -y jq python3
+
+      - name: Run validation
+        run: bash scripts/validate-plugin.sh
 
       - name: Run tests
-        run: bats tests/
+        run: bash tests/run-tests.sh
