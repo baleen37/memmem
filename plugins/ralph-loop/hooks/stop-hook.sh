@@ -5,17 +5,27 @@
 set -euo pipefail
 
 # Read hook input from stdin (advanced stop hook API)
-HOOK_INPUT=$(cat)
+HOOK_INPUT=$(</dev/stdin)
 
-# Check if ralph-loop is active
-RALPH_STATE_FILE=".claude/ralph-loop.local.md"
-if [[ ! -f "$RALPH_STATE_FILE" ]]; then
-    # No active loop - allow exit
+# Extract session_id from hook input
+SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id')
+
+# Sanitize session_id: only allow alphanumeric characters, dashes, and underscores
+if [[ ! "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "Warning: Ralph loop: Invalid session_id format (must be alphanumeric, dash, or underscore)" >&2
+    exit 0
+fi
+
+# Check if ralph-loop is active for this session
+STATE_DIR="$HOME/.claude/ralph-loop"
+STATE_FILE="$STATE_DIR/ralph-loop-$SESSION_ID.local.md"
+if [[ ! -f "$STATE_FILE" ]]; then
+    # No active loop for this session - allow exit
     exit 0
 fi
 
 # Parse markdown frontmatter (YAML between ---) and extract values
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$RALPH_STATE_FILE")
+FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
 ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
 MAX_ITERATIONS=$(echo "$FRONTMATTER" | grep '^max_iterations:' | sed 's/max_iterations: *//')
 
@@ -25,30 +35,30 @@ COMPLETION_PROMISE=$(echo "$FRONTMATTER" | grep '^completion_promise:' | sed 's/
 # Validate numeric fields before arithmetic operations
 if [[ ! "$ITERATION" =~ ^[0-9]+$ ]]; then
     echo "⚠️ Ralph loop: State file corrupted" >&2
-    echo " File: $RALPH_STATE_FILE" >&2
+    echo " File: $STATE_FILE" >&2
     echo " Problem: 'iteration' field is not a valid number (got: '$ITERATION')" >&2
     echo "" >&2
     echo " This usually means the state file was manually edited or corrupted." >&2
     echo " Ralph loop is stopping. Run /ralph-loop again to start fresh." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
 if [[ ! "$MAX_ITERATIONS" =~ ^[0-9]+$ ]]; then
     echo "⚠️ Ralph loop: State file corrupted" >&2
-    echo " File: $RALPH_STATE_FILE" >&2
+    echo " File: $STATE_FILE" >&2
     echo " Problem: 'max_iterations' field is not a valid number (got: '$MAX_ITERATIONS')" >&2
     echo "" >&2
     echo " This usually means the state file was manually edited or corrupted." >&2
     echo " Ralph loop is stopping. Run /ralph-loop again to start fresh." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
 # Check if max iterations reached
 if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
     echo "🛑 Ralph loop: Max iterations ($MAX_ITERATIONS) reached."
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
@@ -60,7 +70,7 @@ if [[ ! -f "$TRANSCRIPT_PATH" ]]; then
     echo " Expected: $TRANSCRIPT_PATH" >&2
     echo " This is unusual and may indicate a Claude Code internal issue." >&2
     echo " Ralph loop is stopping." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
@@ -71,7 +81,7 @@ if ! grep -q '"role":"assistant"' "$TRANSCRIPT_PATH"; then
     echo " Transcript: $TRANSCRIPT_PATH" >&2
     echo " This is unusual and may indicate a transcript format issue" >&2
     echo " Ralph loop is stopping." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
@@ -81,7 +91,7 @@ LAST_LINE=$(grep '"role":"assistant"' "$TRANSCRIPT_PATH" | tail -1)
 if [[ -z "$LAST_LINE" ]]; then
     echo "⚠️ Ralph loop: Failed to extract last assistant message" >&2
     echo " Ralph loop is stopping." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
@@ -99,14 +109,14 @@ if [[ $? -ne 0 ]]; then
     echo " Error: $LAST_OUTPUT" >&2
     echo " This may indicate a transcript format issue" >&2
     echo " Ralph loop is stopping." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
 if [[ -z "$LAST_OUTPUT" ]]; then
     echo "⚠️ Ralph loop: Assistant message contained no text content" >&2
     echo " Ralph loop is stopping." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
@@ -121,7 +131,7 @@ if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]]; then
     # == in [[ ]] does glob pattern matching which breaks with *, ?, [ characters
     if [[ -n "$PROMISE_TEXT" ]] && [[ "$PROMISE_TEXT" = "$COMPLETION_PROMISE" ]]; then
         echo "✅ Ralph loop: Detected <promise>$COMPLETION_PROMISE</promise>"
-        rm "$RALPH_STATE_FILE"
+        rm "$STATE_FILE"
         exit 0
     fi
 fi
@@ -132,11 +142,11 @@ NEXT_ITERATION=$((ITERATION + 1))
 # Extract prompt (everything after the closing ---)
 # Skip first --- line, skip until second --- line, then print everything after
 # Use i>=2 instead of i==2 to handle --- in prompt content
-PROMPT_TEXT=$(awk '/^---$/{i++; next} i>=2' "$RALPH_STATE_FILE")
+PROMPT_TEXT=$(awk '/^---$/{i++; next} i>=2' "$STATE_FILE")
 
 if [[ -z "$PROMPT_TEXT" ]]; then
     echo "⚠️ Ralph loop: State file corrupted or incomplete" >&2
-    echo " File: $RALPH_STATE_FILE" >&2
+    echo " File: $STATE_FILE" >&2
     echo " Problem: No prompt text found" >&2
     echo "" >&2
     echo " This usually means:" >&2
@@ -144,15 +154,15 @@ if [[ -z "$PROMPT_TEXT" ]]; then
     echo " • File was corrupted during writing" >&2
     echo "" >&2
     echo " Ralph loop is stopping. Run /ralph-loop again to start fresh." >&2
-    rm "$RALPH_STATE_FILE"
+    rm "$STATE_FILE"
     exit 0
 fi
 
 # Update iteration in frontmatter (portable across macOS and Linux)
 # Create temp file, then atomically replace
-TEMP_FILE="${RALPH_STATE_FILE}.tmp.$$"
-sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$RALPH_STATE_FILE" > "$TEMP_FILE"
-mv "$TEMP_FILE" "$RALPH_STATE_FILE"
+TEMP_FILE="${STATE_FILE}.tmp.$$"
+sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$STATE_FILE" > "$TEMP_FILE"
+mv "$TEMP_FILE" "$STATE_FILE"
 
 # Build system message with iteration count and completion promise info
 if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]]; then
