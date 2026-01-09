@@ -1,0 +1,32 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          find . -name "*.json" -type f -exec jq empty {} \;
+
+      - name: Validate YAML frontmatter
+        run: |
+          pip install pyyaml
+          python3 scripts/validate-frontmatter.py
+
+      - name: Check naming conventions
+        run: bash scripts/validate-naming.sh
+
+      - name: Validate paths
+        run: bash scripts/validate-paths.sh
+
+      - name: Run validation suite
+        run: bash scripts/validate-plugin.sh
