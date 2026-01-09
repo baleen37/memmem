@@ -17,7 +17,7 @@ Standard boilerplate for creating Claude Code plugins with testing, CI/CD, and v
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-plugin-boilerplate.git
+git clone https://github.com/YOUR_USERNAME/claude-plugin-boilerplate.git
 cd claude-plugin-boilerplate
 
 # Install as a marketplace
