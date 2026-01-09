@@ -49,16 +49,16 @@ STOPPING:
 
 MONITORING:
     # View current iteration:
-    grep '^iteration:' .claude/ralph-loop.local.md
+    grep '^iteration:' ~/.claude/ralph-loop/ralph-loop-\$RALPH_SESSION_ID.local.md
 
     # View full state:
-    head -10 .claude/ralph-loop.local.md
+    head -10 ~/.claude/ralph-loop/ralph-loop-\$RALPH_SESSION_ID.local.md
 HELP_EOF
             exit 0
             ;;
         --max-iterations)
             if [[ -z "${2:-}" ]]; then
-                echo "❌ Error: --max-iterations requires a number argument" >&2
+                echo "Error: --max-iterations requires a number argument" >&2
                 echo "" >&2
                 echo " Valid examples:" >&2
                 echo "   --max-iterations 10" >&2
@@ -69,7 +69,7 @@ HELP_EOF
                 exit 1
             fi
             if ! [[ "$2" =~ ^[0-9]+$ ]]; then
-                echo "❌ Error: --max-iterations must be a positive integer or 0, got: $2" >&2
+                echo "Error: --max-iterations must be a positive integer or 0, got: $2" >&2
                 echo "" >&2
                 echo " Valid examples:" >&2
                 echo "   --max-iterations 10" >&2
@@ -84,7 +84,7 @@ HELP_EOF
             ;;
         --completion-promise)
             if [[ -z "${2:-}" ]]; then
-                echo "❌ Error: --completion-promise requires a text argument" >&2
+                echo "Error: --completion-promise requires a text argument" >&2
                 echo "" >&2
                 echo " Valid examples:" >&2
                 echo "   --completion-promise 'DONE'" >&2
@@ -112,7 +112,7 @@ PROMPT="${PROMPT_PARTS[*]}"
 
 # Validate prompt is non-empty
 if [[ -z "$PROMPT" ]]; then
-    echo "❌ Error: No prompt provided" >&2
+    echo "Error: No prompt provided" >&2
     echo "" >&2
     echo " Ralph needs a task description to work on." >&2
     echo "" >&2
@@ -125,8 +125,29 @@ if [[ -z "$PROMPT" ]]; then
     exit 1
 fi
 
-# Create state file for stop hook (markdown with YAML frontmatter)
-mkdir -p .claude
+# Validate RALPH_SESSION_ID is available
+if [[ -z "${RALPH_SESSION_ID:-}" ]]; then
+    echo "Error: RALPH_SESSION_ID environment variable not found" >&2
+    echo "" >&2
+    echo " This indicates the SessionStart hook may not have run properly." >&2
+    echo " Please check that hooks.json is correctly configured." >&2
+    exit 1
+fi
+
+# Create state directory
+STATE_DIR="$HOME/.claude/ralph-loop"
+mkdir -p "$STATE_DIR"
+
+# State file with session_id
+STATE_FILE="$STATE_DIR/ralph-loop-$RALPH_SESSION_ID.local.md"
+
+# Check for existing loop in this session
+if [[ -f "$STATE_FILE" ]]; then
+    echo "Warning: A Ralph loop is already active for this session" >&2
+    echo " State file: $STATE_FILE" >&2
+    echo " Run /cancel-ralph first to cancel the existing loop" >&2
+    exit 1
+fi
 
 # Quote completion promise for YAML if it contains special chars or is not null
 if [[ -n "$COMPLETION_PROMISE" ]] && [[ "$COMPLETION_PROMISE" != "null" ]]; then
@@ -135,26 +156,31 @@ else
     COMPLETION_PROMISE_YAML="null"
 fi
 
-cat > .claude/ralph-loop.local.md <<EOF
+# Create state file for stop hook (markdown with YAML frontmatter)
+cat > "$STATE_FILE" <<EOF
 ---
 iteration: 0
 max_iterations: $MAX_ITERATIONS
 completion_promise: $COMPLETION_PROMISE_YAML
+session_id: $RALPH_SESSION_ID
 ---
 $PROMPT
 EOF
 
 # Report loop started
-echo "🔄 Ralph loop started (iteration 0)"
+echo "Ralph loop started (iteration 0)"
+echo ""
+echo "Session ID: $RALPH_SESSION_ID"
+echo "State file: $STATE_FILE"
 echo ""
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Completion promise: $COMPLETION_PROMISE"
 echo ""
 echo "STRICT REQUIREMENTS (DO NOT VIOLATE):"
-echo " ✓ Use <promise> XML tags EXACTLY as shown above"
-echo " ✓ The statement MUST be completely and unequivocally TRUE"
-echo " ✓ Do NOT output false statements to exit the loop"
-echo " ✓ Do NOT lie even if you think you should exit"
+echo "  - Use <promise> XML tags EXACTLY as shown above"
+echo "  - The statement MUST be completely and unequivocally TRUE"
+echo "  - Do NOT output false statements to exit the loop"
+echo "  - Do NOT lie even if you think you should exit"
 echo ""
 echo "IMPORTANT - Do not circumvent the loop:"
 echo " Even if you believe you're stuck, the task is impossible,"
