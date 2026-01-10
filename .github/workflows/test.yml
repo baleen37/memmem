@@ -33,11 +33,5 @@ jobs:
           git clone https://github.com/bats-core/bats-support.git
           sudo bats-support/install.sh /usr/local/lib/bats
 
-      - name: Run validation
-        run: bash scripts/validate-plugin.sh
-
       - name: Run Bats tests
-        run: bats --formatter tap tests/
-
-      - name: Run legacy tests (for comparison)
-        run: bash tests/run-tests.sh || true
+        run: bats tests/

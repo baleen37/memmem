@@ -18,28 +18,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # 모든 테스트 실행
-bash tests/run-tests.sh
+bats tests/
 
 # 개별 BATS 테스트 실행
 bats tests/directory_structure.bats
 bats tests/marketplace_json.bats
 bats tests/plugin_json.bats
 bats tests/command_files.bats
+bats tests/agent_files.bats
 bats tests/skill_files.bats
-```
-
-### 검증 (Validation)
-
-```bash
-# 전체 검증 실행
-bash scripts/validate-plugin.sh
-
-# 개별 검증 실행
-bash scripts/validate-structure.sh    # 구조 검증
-bash scripts/validate-json.sh         # JSON 유효성
-python3 scripts/validate-frontmatter.py  # YAML frontmatter
-bash scripts/validate-naming.sh       # 명명 규칙
-bash scripts/validate-paths.sh        # 경로 검증
 ```
 
 ### Pre-commit Hooks
@@ -113,7 +100,6 @@ claude-plugins/
 │   ├── example-plugin/               # 플러그인 템플릿
 │   └── dotfiles-plugin/              # 개인 설정 플러그인
 ├── .github/workflows/                # CI/CD workflows
-├── scripts/                          # 검증 스크립트
 ├── tests/                            # BATS 테스트
 ├── schemas/                          # JSON 스키마
 └── docs/                             # 개발/테스트 문서
@@ -134,7 +120,7 @@ claude-plugins/
 
 4. `.claude-plugin/marketplace.json`에 플러그인 등록
 
-5. 검증 실행: `bash scripts/validate-plugin.sh`
+5. 테스트 실행: `bats tests/`
 
 ### 새 컴포넌트 추가
 

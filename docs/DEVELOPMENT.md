@@ -88,10 +88,34 @@ Update `hooks/hooks.json`:
 4. **Testing**: Add tests for new functionality
 5. **Documentation**: Update README with new features
 
-## Validation
+## Running Tests
 
-Run before committing:
+Run tests before committing:
 
 ```bash
-bash scripts/validate-plugin.sh
+# Run all BATS tests
+bats tests/
+
+# Run specific test
+bats tests/directory_structure.bats
 ```
+
+## Test Files
+
+| Test File | Purpose |
+|-----------|---------|
+| `directory_structure.bats` | Validate plugin structure and required files |
+| `marketplace_json.bats` | Validate marketplace.json format and content |
+| `plugin_json.bats` | Validate individual plugin.json files |
+| `command_files.bats` | Validate command file format and frontmatter |
+| `agent_files.bats` | Validate agent file format and frontmatter |
+| `skill_files.bats` | Validate skill file format and frontmatter |
+
+## CI/CD
+
+Tests run automatically on:
+- Pull requests
+- Push to main branch
+- Releases
+
+See `.github/workflows/` for workflow definitions.
