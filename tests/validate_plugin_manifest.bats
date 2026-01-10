@@ -2,7 +2,7 @@
 # Test suite for plugin.json manifest validation
 # https://code.claude.com/docs/en/plugins-reference#plugin-manifest
 
-load bats_helper
+load helpers/bats_helper
 
 setup() {
     # Create temp directory for test-specific files

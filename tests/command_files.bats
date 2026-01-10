@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: Command files have valid frontmatter
 
-load bats_helper
+load helpers/bats_helper
 
 @test "Command files exist in plugins" {
     command_count=$(find "${PROJECT_ROOT}/plugins" -path "*/commands/*.md" -type f 2>/dev/null | wc -l | tr -d ' ')

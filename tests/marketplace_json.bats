@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: marketplace.json validation
 
-load bats_helper
+load helpers/bats_helper
 
 MARKETPLACE_JSON="${PROJECT_ROOT}/.claude-plugin/marketplace.json"
 

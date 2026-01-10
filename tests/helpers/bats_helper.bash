@@ -2,9 +2,18 @@
 # bats-core test helper for claude-plugins project
 
 # Project root directory
-# BATS_TEST_DIRNAME is the directory containing the test file (tests/)
-# So we need to go up one level to get to project root
-export PROJECT_ROOT="${BATS_TEST_DIRNAME}/.."
+# BATS_TEST_DIRNAME is the directory containing the test file
+# We need to find the project root from wherever the test is running
+if [ -f "${BATS_TEST_DIRNAME}/../../helpers/bats_helper" ]; then
+    # Running from tests/ directory (legacy)
+    export PROJECT_ROOT="${BATS_TEST_DIRNAME}/.."
+elif [ -f "${BATS_TEST_DIRNAME}/../../../tests/helpers/bats_helper" ]; then
+    # Running from plugins/{plugin}/tests/ directory
+    export PROJECT_ROOT="${BATS_TEST_DIRNAME}/../.."
+else
+    # Fallback: use script location
+    export PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+fi
 
 # Path to jq binary
 JQ_BIN="${JQ_BIN:-jq}"

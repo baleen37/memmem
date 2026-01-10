@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: plugin.json validation
 
-load bats_helper
+load helpers/bats_helper
 
 PLUGIN_JSON="${PROJECT_ROOT}/plugins/example-plugin/.claude-plugin/plugin.json"
 

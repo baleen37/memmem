@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: SKILL.md files have valid frontmatter
 
-load bats_helper
+load helpers/bats_helper
 
 @test "SKILL.md files exist" {
     skill_count=$(count_files "SKILL.md" "${PROJECT_ROOT}")

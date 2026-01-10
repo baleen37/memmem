@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test suite for path portability validation
 
-load bats_helper
+load helpers/bats_helper
 
 setup() {
     # Create temp directory for test-specific files

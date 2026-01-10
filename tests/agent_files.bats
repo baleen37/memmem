@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: Agent files have valid frontmatter
 
-load bats_helper
+load helpers/bats_helper
 
 @test "Agent files exist in plugins" {
     agent_count=$(find "${PROJECT_ROOT}/plugins" -path "*/agents/*.md" -type f 2>/dev/null | wc -l | tr -d ' ')

@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Test: Required directory structure
 
-load bats_helper
+load helpers/bats_helper
 
 @test "Required directories exist" {
     [ -d "${PROJECT_ROOT}/.claude-plugin" ]
