@@ -2,48 +2,50 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
         run: |
           sudo apt-get update
           sudo apt-get install -y jq python3
-
-      - name: Install Bats
-        run: |
           git clone https://github.com/bats-core/bats-core.git
           cd bats-core
           sudo ./install.sh /usr/local
-
-      - name: Install bats-assert
-        run: |
+          cd ..
           git clone https://github.com/bats-core/bats-assert.git
           sudo bats-assert/install.sh /usr/local
-
-      - name: Install bats-support
-        run: |
           git clone https://github.com/bats-core/bats-support.git
           sudo bats-support/install.sh /usr/local
+          bats tests/
 
-      - name: Run Bats tests
-        run: bats tests/
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+      - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: npx semantic-release

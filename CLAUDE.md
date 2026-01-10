@@ -29,6 +29,42 @@ bats tests/agent_files.bats
 bats tests/skill_files.bats
 ```
 
+### 버전 관리 & 릴리스
+
+이 프로젝트는 **semantic-release**와 **Conventional Commits**를 사용하여 자동 버전 관리를 합니다.
+
+#### 커밋 규칙 (Conventional Commits)
+
+```bash
+# 대화형 커밋 (권장)
+npm run commit
+
+# 또는 직접 작성
+git commit -m "type(scope): description"
+```
+
+**타입 (type):**
+- `feat`: 새로운 기능 (minor 버전 증가)
+- `fix`: 버그 수정 (patch 버전 증가)
+- `docs`, `style`, `refactor`, `test`, `build`, `ci`, `chore`: 버전 증가 없음
+
+**스코프 (scope):** 플러그인 이름 (`ralph-loop`, `git-guard`, `me`, `example-plugin`)
+
+**예시:**
+```
+feat(ralph-loop): add new iteration feature
+fix(git-guard): prevent commit bypass
+docs(me): update TDD instructions
+```
+
+#### 자동 릴리스 흐름
+
+1. main 브랜치에 Conventional Commits 형식으로 push
+2. GitHub Actions가 테스트 실행 후 semantic-release 실행
+3. 변경사항 분석 후 버전 결정 (feat → minor, fix → patch)
+4. 각 `plugin.json`과 `marketplace.json` 버전 자동 업데이트
+5. Git 태그 생성 및 GitHub Release 생성
+
 ### Pre-commit Hooks
 
 ```bash
@@ -41,6 +77,7 @@ pre-commit은 다음을 검증합니다:
 - JSON 검증
 - ShellCheck (쉘 스크립트 린트)
 - markdownlint (Markdown 린트)
+- commitlint (커밋 메시지 형식)
 
 ## Architecture
 

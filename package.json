@@ -1,0 +1,26 @@
+{
+  "name": "claude-plugins",
+  "version": "1.0.0",
+  "description": "Baleen Claude Plugins - Claude Code plugin collection",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "husky",
+    "commit": "git-cz"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.1",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "^9.1.7",
+    "semantic-release": "^24.2.0"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}
