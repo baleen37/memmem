@@ -19,3 +19,12 @@ repos:
     hooks:
       - id: markdownlint
         args: [--config=.markdownlint.json]
+
+  - repo: local
+    hooks:
+      - id: bats-tests
+        name: BATS test runner
+        entry: bats tests/
+        language: system
+        pass_types: [bash, sh]
+        always_run: true

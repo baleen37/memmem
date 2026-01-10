@@ -3,7 +3,6 @@ set -euo pipefail
 
 # Read input from stdin
 INPUT=$(cat)
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name')
 FILE_PATH=$(echo "$INPUT" | jq -r '.file_path // ""')
 
 # Validate

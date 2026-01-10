@@ -56,8 +56,8 @@ claude-plugins/
 │       ├── skills/
 │       └── hooks/
 ├── .github/workflows/            # CI/CD workflows
-├── scripts/                      # Validation scripts
-└── tests/                        # Test scripts
+├── tests/                        # BATS tests
+└── schemas/                      # JSON schemas
 ```
 
 ## Development
@@ -74,14 +74,14 @@ cp -r plugins/example-plugin plugins/my-plugin
 4. Update `plugins/my-plugin/README.md`
 5. Add to `.claude-plugin/marketplace.json`
 
-### Running Validation
+### Running Tests
 
 ```bash
-# Run tests
-bash tests/run-tests.sh
+# Run all BATS tests
+bats tests/
 
-# Validate all plugins
-bash scripts/validate-plugin.sh
+# Run specific test file
+bats tests/directory_structure.bats
 
 # Run pre-commit hooks manually
 pre-commit run --all-files

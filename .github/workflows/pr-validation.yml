@@ -12,21 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate JSON files
+      - name: Install dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y jq
-          find . -name "*.json" -type f -exec jq empty {} \;
+          sudo apt-get update
+          sudo apt-get install -y jq python3
 
-      - name: Validate YAML frontmatter
+      - name: Install Bats
         run: |
-          pip install pyyaml
-          python3 scripts/validate-frontmatter.py
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          sudo ./install.sh /usr/local
 
-      - name: Check naming conventions
-        run: bash scripts/validate-naming.sh
+      - name: Install bats-assert
+        run: |
+          git clone https://github.com/bats-core/bats-assert.git
+          sudo bats-assert/install.sh /usr/local/lib/bats
 
-      - name: Validate paths
-        run: bash scripts/validate-paths.sh
+      - name: Install bats-support
+        run: |
+          git clone https://github.com/bats-core/bats-support.git
+          sudo bats-support/install.sh /usr/local/lib/bats
 
-      - name: Run validation suite
-        run: bash scripts/validate-plugin.sh
+      - name: Run Bats tests
+        run: bats tests/
