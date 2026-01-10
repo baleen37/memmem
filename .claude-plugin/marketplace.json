@@ -1,9 +1,9 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "claude-plugin-boilerplate",
-  "description": "Standard boilerplate for creating Claude Code plugins with testing, CI/CD, and validation",
+  "name": "baleen-plugins",
+  "description": "Claude Code plugins collection by baleen",
   "owner": {
-    "name": "jito",
+    "name": "baleen",
     "email": "git@baleen.me"
   },
   "plugins": [
