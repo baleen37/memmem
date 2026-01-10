@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Ralph Loop**: Ralph Wiggum 기법을 구현한 반복적 자기 참조 AI 개발 루프
 - **Example Plugin**: 모든 컴포넌트 유형을 보여주는 데모 플러그인
-- **Dotfiles Plugin**: 개인용 Claude Code 설정 관리
+- **My Workflow**: 개인용 개발 워크플로우 자동화 (TDD, debugging, git, code review)
 
 ## Common Commands
 
@@ -98,7 +98,7 @@ claude-plugins/
 │   │   ├── scripts/                  # Setup & cancel scripts
 │   │   └── .claude-plugin/plugin.json
 │   ├── example-plugin/               # 플러그인 템플릿
-│   └── dotfiles-plugin/              # 개인 설정 플러그인
+│   └── my-workflow/                  # 개인용 개발 워크플로우 자동화
 ├── .github/workflows/                # CI/CD workflows
 ├── tests/                            # BATS 테스트
 ├── schemas/                          # JSON 스키마
