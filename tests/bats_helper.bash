@@ -5,10 +5,6 @@
 # BATS_TEST_DIRNAME is the directory containing the test file (tests/)
 # So we need to go up one level to get to project root
 export PROJECT_ROOT="${BATS_TEST_DIRNAME}/.."
-export TEST_ROOT="${BATS_TEST_DIRNAME}"
-
-# Test fixtures directory
-export TEST_FIXTURES="${TEST_ROOT}/fixtures"
 
 # Path to jq binary
 JQ_BIN="${JQ_BIN:-jq}"
