@@ -1,0 +1,15 @@
+#!/usr/bin/env bats
+# Test: Agent files have valid frontmatter
+
+load bats_helper
+
+@test "Agent files exist in plugins" {
+    agent_count=$(count_files "*.md" "${PROJECT_ROOT}/plugins/*/agents")
+    [ "$agent_count" -gt 0 ]
+}
+
+@test "Agent files have frontmatter delimiter" {
+    while IFS= read -r -d '' file; do
+        has_frontmatter_delimiter "$file"
+    done < <(find "${PROJECT_ROOT}/plugins" -path "*/agents/*.md" -type f -print0 2>/dev/null)
+}
