@@ -4,7 +4,7 @@
 load bats_helper
 
 @test "Command files exist in plugins" {
-    command_count=$(count_files "*.md" "${PROJECT_ROOT}/plugins/*/commands")
+    command_count=$(find "${PROJECT_ROOT}/plugins" -path "*/commands/*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
     [ "$command_count" -gt 0 ]
 }
 

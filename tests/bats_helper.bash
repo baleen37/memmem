@@ -2,8 +2,10 @@
 # bats-core test helper for claude-plugins project
 
 # Project root directory
-export TEST_ROOT="${BATS_TEST_DIRNAME}/.."
-export PROJECT_ROOT="${TEST_ROOT}/.."
+# BATS_TEST_DIRNAME is the directory containing the test file (tests/)
+# So we need to go up one level to get to project root
+export PROJECT_ROOT="${BATS_TEST_DIRNAME}/.."
+export TEST_ROOT="${BATS_TEST_DIRNAME}"
 
 # Test fixtures directory
 export TEST_FIXTURES="${TEST_ROOT}/fixtures"
