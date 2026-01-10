@@ -4,8 +4,9 @@ Personal Claude Code configuration - TDD, systematic debugging, git workflow, co
 
 ## Components
 
-### Commands (12)
+### Commands (13)
 - **clean-worktree**: Clean up git worktrees
+- **commit-push-pr**: Commit, push, and create/update pull requests
 - **create-command**: Create new Claude Code commands
 - **create-hook**: Create new hook commands
 - **create-skill**: Create new skills with TDD workflow
@@ -23,7 +24,7 @@ Personal Claude Code configuration - TDD, systematic debugging, git workflow, co
 
 ### Skills (7)
 - **ci-troubleshooting**: Systematic CI debugging approach
-- **commit-push-pr**: Complete git workflow (commit → push → PR)
+- **commit-push-pull-request**: Complete git workflow (commit → push → PR)
 - **nix-direnv-setup**: Direnv integration for Nix flakes
 - **setup-precommit-and-ci**: Pre-commit hooks and CI setup
 - **using-git-worktrees**: Isolated feature work with worktrees
