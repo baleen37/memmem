@@ -44,4 +44,29 @@ fi
 # Safe to use unquoted since we validated SESSION_ID contains only safe characters
 echo "export RALPH_SESSION_ID=$SESSION_ID" >> "$ENV_FILE"
 
+# Check if there's an existing active Ralph Loop for this session
+STATE_DIR="$HOME/.claude/ralph-loop"
+STATE_FILE="$STATE_DIR/ralph-loop-$SESSION_ID.local.md"
+
+if [[ -f "$STATE_FILE" ]]; then
+    # Parse the state file to get loop information
+    FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
+    ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
+    MAX_ITERATIONS=$(echo "$FRONTMATTER" | grep '^max_iterations:' | sed 's/max_iterations: *//')
+    COMPLETION_PROMISE=$(echo "$FRONTMATTER" | grep '^completion_promise:' | sed 's/completion_promise: *//' | sed 's/^"\(.*\)"$/\1/')
+
+    # Build status message to show Claude
+    echo "🔄 Ralph Loop Active (iteration $ITERATION)"
+    if [[ "$MAX_ITERATIONS" != "0" ]]; then
+        echo "   Max iterations: $MAX_ITERATIONS"
+    else
+        echo "   Max iterations: unlimited"
+    fi
+    if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]]; then
+        echo "   Completion promise: <promise>$COMPLETION_PROMISE</promise>"
+    fi
+    echo "   State file: $STATE_FILE"
+    echo ""
+fi
+
 exit 0
