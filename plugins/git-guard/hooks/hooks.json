@@ -1,14 +1,17 @@
 {
-  "$schema": "../../schemas/hooks.json",
-  "hooks": [
-    {
-      "name": "commit-guard",
-      "description": "Blocks git commands that bypass hooks (--no-verify, HUSKY=0, etc.)",
-      "events": ["PreToolUse"],
-      "toolFilter": {
-        "name": "Bash"
-      },
-      "command": "commit-guard.sh"
-    }
-  ]
+  "$schema": "../../schemas/hooks-schema.json",
+  "description": "Git Guard hooks - prevents bypassing git hooks",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/commit-guard.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
