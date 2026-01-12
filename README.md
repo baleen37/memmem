@@ -70,15 +70,23 @@ claude-plugins/
 │   ├── ralph-loop/               # Ralph Wiggum iterative development
 │   │   ├── commands/             # Slash commands
 │   │   ├── hooks/                # SessionStart, Stop hooks
-│   │   └── scripts/              # Setup and cancel scripts
+│   │   ├── scripts/              # Setup and cancel scripts
+│   │   └── tests/                # BATS tests
 │   ├── git-guard/                # Git workflow protection
 │   │   ├── commands/             # Slash commands
 │   │   ├── hooks/                # Git hooks (pre-commit, pre-push)
 │   │   └── tests/                # BATS tests
-│   └── me/              # Personal workflow automation
+│   └── me/                       # Personal workflow automation
+│       ├── commands/             # Slash commands
+│       ├── agents/               # Autonomous agents
+│       ├── skills/               # Context-aware skills
+│       ├── hooks/                # Session hooks
+│       └── tests/                # BATS tests
 ├── .github/workflows/            # CI/CD workflows
+├── docs/                         # Development and testing documentation
 ├── tests/                        # BATS tests
-└── schemas/                      # JSON schemas
+├── schemas/                      # JSON schemas
+└── CLAUDE.md                     # Project instructions for Claude Code
 ```
 
 ## Development
