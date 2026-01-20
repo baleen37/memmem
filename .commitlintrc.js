@@ -18,18 +18,7 @@ export default {
         'revert',
       ],
     ],
-    'scope-enum': [
-      2,
-      'always',
-      [
-        'ralph-loop',
-        'git-guard',
-        'me',
-        'example-plugin',
-        'release',
-        'ci',
-      ],
-    ],
+    'scope-empty': [0],
     'subject-case': [0],
     // Disable max line length for release commits (they contain long URLs)
     'body-max-line-length': [0],

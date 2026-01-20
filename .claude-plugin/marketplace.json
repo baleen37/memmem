@@ -48,6 +48,20 @@
         "debugging"
       ],
       "version": "1.3.0"
+    },
+    {
+      "name": "jira",
+      "description": "Jira integration via Atlassian MCP server - create, search, and manage issues",
+      "source": "./plugins/jira",
+      "category": "productivity",
+      "tags": [
+        "jira",
+        "project-management",
+        "issue-tracking",
+        "atlassian",
+        "mcp"
+      ],
+      "version": "0.1.0"
     }
   ]
 }
