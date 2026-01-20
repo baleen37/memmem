@@ -87,9 +87,7 @@ validate_git_command() {
 # Extract git command from JSON input
 extract_command_from_json() {
     local json_input="$1"
-
-    # Use grep + sed to extract command field from JSON
-    echo "$json_input" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"command"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/'
+    echo "$json_input" | jq -r '.command // empty'
 }
 
 # Main execution
