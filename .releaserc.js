@@ -41,20 +41,6 @@ const plugins = [
   '@semantic-release/release-notes-generator',
   updatePluginJsons(),
   [
-    '@semantic-release/git',
-    {
-      assets: [
-        '.claude-plugin/marketplace.json',
-        'plugins/auto-updater/.claude-plugin/plugin.json',
-        'plugins/git-guard/.claude-plugin/plugin.json',
-        'plugins/me/.claude-plugin/plugin.json',
-        'plugins/ralph-loop/.claude-plugin/plugin.json',
-      ],
-      message:
-        'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
-    },
-  ],
-  [
     '@semantic-release/github',
     {
       successComment: false,
