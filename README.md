@@ -133,6 +133,13 @@ Ralph embodies several key principles:
 
 This project uses automated releases via semantic-release. All commits to main trigger CI tests and release automation.
 
+### Release Process
+
+1. Commits to main trigger the Release workflow
+2. semantic-release analyzes commits and determines version bump
+3. Version files are updated and a release PR is created
+4. Merging the release PR creates a GitHub release
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file.
