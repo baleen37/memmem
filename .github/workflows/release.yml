@@ -53,32 +53,41 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Save current HEAD
+          # Save current state
           CURRENT_HEAD=$(git rev-parse HEAD)
+          git diff --quiet || CURRENT_DIFF="changed"
 
-          # Run semantic-release (it will commit changes if release is needed)
-          npx semantic-release || echo "Semantic-release completed with errors (may be expected if no release)"
+          # Run semantic-release to update version files
+          npx semantic-release
 
-          # Check if new commits were made (semantic-release creates commits)
-          NEW_HEAD=$(git rev-parse HEAD)
-
-          if [ "$CURRENT_HEAD" != "$NEW_HEAD" ]; then
+          # Check if files were modified (semantic-release updated version files)
+          if ! git diff --quiet; then
             echo "Release changes detected, creating PR..."
 
-            # Create release branch from current HEAD
-            git checkout -b release
+            # Get the new version from the updated files
+            VERSION=$(node -p "require('./plugins/ralph-loop/.claude-plugin/plugin.json').version")
 
-            # Push release branch
+            # Commit the changes
+            git add .
+            git commit -m "chore(release): ${VERSION} [skip ci]
+
+            This automated release updates version numbers across all plugins.
+            "
+
+            # Create release branch and push
+            git checkout -b release
             git push origin release --force
 
-            # Get version from the commits
-            VERSION=$(git log -1 --pretty=%B | grep -oP 'chore\(release\): \K[0-9.]+' || echo "automated")
-
-            # Create or update PR
+            # Create PR
             if gh pr view release >/dev/null 2>&1; then
               echo "PR already exists"
             else
-              gh pr create --base main --head release --title "chore(release): ${VERSION}" --body "Automated release PR created by semantic-release"
+              gh pr create --base main --head release --title "chore(release): ${VERSION}" --body "Automated release PR created by semantic-release
+
+            Changes:
+            - Version bump to ${VERSION}
+            - All plugin versions updated
+            "
             fi
           else
             echo "No release needed"
