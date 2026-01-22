@@ -34,13 +34,21 @@ teardown() {
 }
 
 @test "update-checker.sh can read test marketplace.json" {
-  export MARKETPLACE_FILE="$FIXTURES_DIR/marketplace.json"
+  # Create a fake plugin executable in PATH
+  mkdir -p "$TEMP_DIR/bin"
+  cat > "$TEMP_DIR/bin/plugin" << 'EOF'
+#!/usr/bin/env bash
+# Mock plugin command for testing
+if [ "$1" = "list" ]; then
+  echo "[]"
+fi
+EOF
+  chmod +x "$TEMP_DIR/bin/plugin"
+  export PATH="$TEMP_DIR/bin:$PATH"
 
-  # Mock /plugin list to return empty (simulate no plugins installed)
-  function /plugin() {
-    echo "[]"
-  }
-  export -f /plugin
+  # Set up environment for the script
+  export CLAUDE_PLUGIN_ROOT="$FIXTURES_DIR/../../.."
+  export MARKETPLACE_FILE="$FIXTURES_DIR/marketplace.json"
 
   run "$SCRIPT_DIR/update-checker.sh" --check-only
   [ "$status" -eq 0 ]
@@ -54,13 +62,37 @@ teardown() {
 }
 
 @test "last-check timestamp file is created after check" {
+  # Create a fake plugin executable in PATH
+  mkdir -p "$TEMP_DIR/bin"
+  cat > "$TEMP_DIR/bin/plugin" << 'EOF'
+#!/usr/bin/env bash
+# Mock plugin command for testing
+if [ "$1" = "list" ]; then
+  echo "[]"
+elif [ "$1" = "install" ]; then
+  # Simulate successful install
+  exit 0
+fi
+EOF
+  chmod +x "$TEMP_DIR/bin/plugin"
+  export PATH="$TEMP_DIR/bin:$PATH"
+
+  # Set up environment for the script
+  export CLAUDE_PLUGIN_ROOT="$FIXTURES_DIR/../../.."
   export MARKETPLACE_FILE="$FIXTURES_DIR/marketplace.json"
 
-  function /plugin() {
-    echo "[]"
-  }
-  export -f /plugin
+  # Timestamp should not exist initially
+  [ ! -f "$CONFIG_DIR/last-check" ]
 
-  # This test will validate timestamp file creation
-  # Placeholder for now - will be implemented with actual script
+  # Run without --check-only to trigger timestamp creation
+  run "$SCRIPT_DIR/update-checker.sh" --silent
+  [ "$status" -eq 0 ]
+
+  # Timestamp file should now exist
+  [ -f "$CONFIG_DIR/last-check" ]
+
+  # Verify it contains a valid timestamp (Unix epoch)
+  local timestamp
+  timestamp=$(cat "$CONFIG_DIR/last-check")
+  [[ "$timestamp" =~ ^[0-9]+$ ]]
 }

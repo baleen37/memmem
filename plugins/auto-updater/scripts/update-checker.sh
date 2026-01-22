@@ -18,8 +18,8 @@ if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   exit 0
 fi
 
-# Find marketplace.json
-MARKETPLACE_FILE="${CLAUDE_PLUGIN_ROOT}/../../.claude-plugin/marketplace.json"
+# Find marketplace.json (allow override via environment variable for testing)
+MARKETPLACE_FILE="${MARKETPLACE_FILE:-${CLAUDE_PLUGIN_ROOT}/../../.claude-plugin/marketplace.json}"
 
 # Parse command line arguments
 SILENT_MODE=false

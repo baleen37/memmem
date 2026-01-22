@@ -74,6 +74,18 @@
         "hooks"
       ],
       "version": "1.4.0"
+    },
+    {
+      "name": "auto-updater",
+      "description": "Automatic plugin installation and updates from baleen-plugins marketplace",
+      "source": "./plugins/auto-updater",
+      "category": "development",
+      "tags": [
+        "automation",
+        "updates",
+        "marketplace"
+      ],
+      "version": "1.0.0"
     }
   ]
 }
