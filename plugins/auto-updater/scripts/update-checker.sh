@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+# update-checker.sh
+# Checks for plugin updates from marketplace and installs/updates them automatically
+#
 
 set -euo pipefail
 
