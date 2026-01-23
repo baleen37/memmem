@@ -67,8 +67,8 @@ jobs:
           if ! git diff --quiet; then
             echo "Release changes detected, creating PR..."
 
-            # Get the new version from the updated files
-            VERSION=$(node -p "require('./plugins/ralph-loop/.claude-plugin/plugin.json').version")
+            # Get the new version from marketplace.json (all plugins have the same version)
+            VERSION=$(node -p "require('./.claude-plugin/marketplace.json').plugins[0].version")
 
             # Commit the changes
             git add .

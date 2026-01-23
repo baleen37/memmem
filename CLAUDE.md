@@ -48,13 +48,13 @@ git commit -m "type(scope): description"
 - `fix`: 버그 수정 (patch 버전 증가)
 - `docs`, `style`, `refactor`, `test`, `build`, `ci`, `chore`: 버전 증가 없음
 
-**스코프 (scope):** 플러그인 이름 (`ralph-loop`, `git-guard`, `me`, `example-plugin`)
+**스코프 (scope):** 플러그인 이름 (`example-plugin`)
 
 **예시:**
 ```
-feat(ralph-loop): add new iteration feature
-fix(git-guard): prevent commit bypass
-docs(me): update TDD instructions
+feat(example-plugin): add new feature
+fix(example-plugin): fix bug in component
+docs(example-plugin): update documentation
 ```
 
 #### 자동 릴리스 흐름
@@ -139,16 +139,13 @@ claude-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json              # Marketplace 설정
 ├── plugins/
-│   ├── ralph-loop/                   # Ralph Wiggum 반복 개발
-│   │   ├── commands/                 # Slash commands
-│   │   ├── hooks/                    # SessionStart, Stop hooks
-│   │   ├── scripts/                  # Setup & cancel scripts
-│   │   └── .claude-plugin/plugin.json
-│   ├── git-guard/                    # Git 워크플로우 보호
-│   │   ├── commands/                 # Slash commands
-│   │   ├── hooks/                    # Git hooks (pre-commit, pre-push)
-│   │   └── .claude-plugin/plugin.json
-│   └── me/                  # 개인용 개발 워크플로우 자동화
+│   └── example-plugin/               # 예시 플러그인 구조
+│       ├── commands/                 # Slash commands
+│       ├── agents/                   # 자율 전문가 에이전트
+│       ├── skills/                   # 컨텍스트 인식 가이드
+│       ├── hooks/                    # Git hooks, SessionStart/Stop hooks
+│       ├── scripts/                  # 유틸리티 스크립트
+│       └── .claude-plugin/plugin.json
 ├── .github/workflows/                # CI/CD workflows
 ├── tests/                            # BATS 테스트
 ├── schemas/                          # JSON 스키마
@@ -175,6 +172,8 @@ claude-plugins/
 5. `.claude-plugin/marketplace.json`에 플러그인 등록
 
 6. 테스트 실행: `bats tests/`
+
+> **참고:** `.releaserc.js`는 플러그인을 자동으로 발견하므로 수정할 필요가 없습니다.
 
 ### 새 컴포넌트 추가
 

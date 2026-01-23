@@ -1,5 +1,25 @@
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { resolve } from 'path';
+
+/**
+ * Dynamically discover all plugins from the plugins directory.
+ * A plugin is identified by the presence of .claude-plugin/plugin.json.
+ */
+function discoverPlugins() {
+  const pluginsDir = resolve(process.cwd(), 'plugins');
+  const plugins = [];
+
+  for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      const pluginJsonPath = resolve(pluginsDir, entry.name, '.claude-plugin/plugin.json');
+      if (existsSync(pluginJsonPath)) {
+        plugins.push(entry.name);
+      }
+    }
+  }
+
+  return plugins;
+}
 
 /**
  * Custom plugin to update version in plugin.json files
@@ -9,7 +29,7 @@ import { resolve } from 'path';
 function updatePluginJsons() {
   return {
     async prepare(_pluginContext, { nextRelease: { version } }) {
-      const plugins = ['auto-updater', 'git-guard', 'jira', 'me', 'ralph-loop'];
+      const plugins = discoverPlugins();
 
       for (const plugin of plugins) {
         const pluginJsonPath = resolve(
