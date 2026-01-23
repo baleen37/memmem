@@ -4,25 +4,14 @@ Claude Code plugin collection by baleen, featuring useful tools for AI-assisted 
 
 ## Available Plugins
 
-### Ralph Loop
-Implementation of the Ralph Wiggum technique for iterative, self-referential AI development loops in Claude Code.
+Plugins are automatically discovered from the `plugins/` directory. For detailed information about each plugin, see the respective plugin's README.md file.
 
-- **Description**: Continuous self-referential AI loops for interactive iterative development
-- **Commands**: `/ralph-loop`, `/cancel-ralph`, `/help`
-- **Use Case**: Well-defined tasks requiring iteration and refinement
-
-### Git Guard
-Git workflow protection hooks that prevent commit and PR bypasses.
-
-- **Description**: Prevents `--no-verify` commit bypass and enforces pre-commit checks
-- **Commands**: `/install-git-guard`, `/uninstall-git-guard`
-- **Use Case**: Teams requiring strict git workflow compliance
-
-### My Workflow
-Personal Claude Code configuration for development workflow automation.
-
-- **Description**: TDD, systematic debugging, git workflow, code review, and development automation
-- **Use Case**: Personal development environment setup
+- **Ralph Loop**: Implementation of the Ralph Wiggum technique for iterative, self-referential AI development loops
+- **Git Guard**: Git workflow protection hooks that prevent commit and PR bypasses
+- **My Workflow**: Personal development workflow automation (TDD, debugging, git, code review)
+- **Jira**: Jira integration for issue tracking and project management
+- **Auto Updater**: Automatic plugin updates from marketplace
+- **Strategic Compact**: Strategic content compaction and organization tools
 
 ## Quick Start
 
@@ -66,21 +55,13 @@ claude
 claude-plugins/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace configuration (baleen-plugins)
-├── plugins/
-│   ├── ralph-loop/               # Ralph Wiggum iterative development
-│   │   ├── commands/             # Slash commands
-│   │   ├── hooks/                # SessionStart, Stop hooks
-│   │   ├── scripts/              # Setup and cancel scripts
-│   │   └── tests/                # BATS tests
-│   ├── git-guard/                # Git workflow protection
-│   │   ├── commands/             # Slash commands
-│   │   ├── hooks/                # Git hooks (pre-commit, pre-push)
-│   │   └── tests/                # BATS tests
-│   └── me/                       # Personal workflow automation
+├── plugins/                      # Plugins (auto-discovered)
+│   └── example-plugin/           # Example plugin structure
 │       ├── commands/             # Slash commands
 │       ├── agents/               # Autonomous agents
 │       ├── skills/               # Context-aware skills
-│       ├── hooks/                # Session hooks
+│       ├── hooks/                # Git hooks, SessionStart/Stop hooks
+│       ├── scripts/              # Utility scripts
 │       └── tests/                # BATS tests
 ├── .github/workflows/            # CI/CD workflows
 ├── docs/                         # Development and testing documentation
