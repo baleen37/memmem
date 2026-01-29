@@ -55,9 +55,9 @@ setup() {
             description=$(json_get "$manifest" "description")
             author=$(json_get "$manifest" "author")
 
-            [ -n "$name" ]
-            [ -n "$description" ]
-            [ -n "$author" ]
+            assert_not_empty "$name" "plugin.json name field should not be empty in $manifest"
+            assert_not_empty "$description" "plugin.json description field should not be empty in $manifest"
+            assert_not_empty "$author" "plugin.json author field should not be empty in $manifest"
         fi
     done
 }
