@@ -10,7 +10,7 @@ setup() {
 }
 
 @test "marketplace.json exists" {
-    [ -f "$MARKETPLACE_JSON" ]
+    assert_file_exists "$MARKETPLACE_JSON" "marketplace.json should exist"
 }
 
 @test "marketplace.json is valid JSON" {
@@ -26,13 +26,13 @@ setup() {
 @test "marketplace.json owner.name is not empty" {
     local owner_name
     owner_name=$(json_get "$MARKETPLACE_JSON" "owner.name")
-    [ -n "$owner_name" ]
+    assert_not_empty "$owner_name" "marketplace.json owner.name field should not be empty"
 }
 
 @test "marketplace.json plugins array exists" {
     local plugins
     plugins=$($JQ_BIN -r '.plugins | type' "$MARKETPLACE_JSON")
-    [ "$plugins" == "array" ]
+    assert_eq "$plugins" "array" "marketplace.json plugins field should be an array"
 }
 
 @test "marketplace.json includes all plugins in plugins/ directory" {
@@ -83,9 +83,9 @@ setup() {
         local full_path="${PROJECT_ROOT}/${source}"
 
         # Check if directory exists
-        [ -d "$full_path" ] || echo "Plugin source '$source' in marketplace.json does not exist"
+        assert_dir_exists "$full_path" "Plugin source '$source' should exist"
 
         # Check if plugin.json exists
-        [ -f "${full_path}/.claude-plugin/plugin.json" ] || echo "Plugin source '$source' does not have .claude-plugin/plugin.json"
+        assert_file_exists "${full_path}/.claude-plugin/plugin.json" "Plugin source '$source' should have plugin.json"
     done
 }
