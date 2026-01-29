@@ -16,9 +16,33 @@
 
 set -euo pipefail
 
-# Track tool call count (increment in a temp file)
-COUNTER_FILE=$(mktemp "${TMPDIR:-/tmp}/claude-tool-count.XXXXXX") || exit 1
-trap 'rm -f "$COUNTER_FILE"' EXIT
+# Validate session_id format (local copy for now)
+validate_session_id() {
+  local session_id="$1"
+  if [[ ! "$session_id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "Warning: Invalid session_id format: '$session_id'" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Determine session_id: use environment variable or fall back to PID
+SESSION_ID="${STRATEGIC_COMPACT_SESSION_ID:-$$}"
+if ! validate_session_id "$SESSION_ID" 2>/dev/null; then
+  SESSION_ID="$$"
+fi
+
+# Create state directory if it doesn't exist
+STATE_DIR="$HOME/.claude/strategic-compact"
+if [ ! -d "$STATE_DIR" ]; then
+  mkdir -p "$STATE_DIR" || {
+    echo "Warning: Could not create state directory $STATE_DIR" >&2
+    exit 1
+  }
+fi
+
+# Use session-based persistent file for counter
+COUNTER_FILE="$STATE_DIR/tool-count-$SESSION_ID.txt"
 THRESHOLD=${COMPACT_THRESHOLD:-50}
 
 # Initialize or increment counter
