@@ -28,7 +28,12 @@ if [[ -z "$ENV_FILE" ]]; then
     ENV_FILE="$HOME/.claude/strategic-compact/session-env.sh"
 fi
 
-if [[ -f "$ENV_FILE" ]] && [[ -w "$ENV_FILE" ]]; then
+# Create ENV_FILE if it doesn't exist
+if [[ ! -f "$ENV_FILE" ]]; then
+    touch "$ENV_FILE" || exit 0
+fi
+
+if [[ -w "$ENV_FILE" ]]; then
     # Safe to use unquoted since we validated SESSION_ID contains only safe characters
     echo "export STRATEGIC_COMPACT_SESSION_ID=$SESSION_ID" >> "$ENV_FILE"
 fi
