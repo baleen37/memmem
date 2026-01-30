@@ -59,7 +59,7 @@ wait_for_claude_ready() {
     echo "Waiting for Claude Code to be ready (timeout: ${timeout}s)..." >&2
 
     while [ $elapsed -lt $timeout ]; do
-        if docker exec "$container_name" command -v claude &>/dev/null; then
+        if docker exec "$container_name" bash -c "command -v claude" >/dev/null 2>&1; then
             echo "Claude Code is ready" >&2
             return 0
         fi
