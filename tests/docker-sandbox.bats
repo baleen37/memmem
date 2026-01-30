@@ -27,19 +27,20 @@ teardown() {
 }
 
 @test "docker-helpers.sh: check_docker_available returns false when Docker is not available" {
-    # Save PATH
-    OLD_PATH="$PATH"
-
-    # Temporarily remove docker from PATH
-    PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '/docker' | tr '\n' ':')
+    # Mock docker command to return failure
+    docker() {
+        echo "docker: command not found" >&2
+        return 1
+    }
+    export -f docker
 
     source "$DOCKER_SANDBOX_DIR/scripts/lib/docker-helpers.sh"
 
     run check_docker_available
     [ "$status" -ne 0 ]
 
-    # Restore PATH
-    PATH="$OLD_PATH"
+    # Unmock docker function
+    unset -f docker
 }
 
 @test "docker-helpers.sh: create_container creates a running container" {
