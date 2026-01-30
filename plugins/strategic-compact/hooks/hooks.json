@@ -2,6 +2,17 @@
   "$schema": "../../schemas/hooks-schema.json",
   "description": "Strategic Compact hooks - suggests manual compaction at logical intervals",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-hook.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
