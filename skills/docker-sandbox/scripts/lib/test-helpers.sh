@@ -21,8 +21,8 @@ load_test_definition() {
 
     # Parse YAML using grep/sed
     TEST_NAME=$(grep '^name:' "$test_file" | sed 's/name: *//; s/"//g; s/\r//')
-    TEST_TARGET_TYPE=$(grep -A1 '^test_target:' "$test_file" | grep 'type:' | sed 's/.*type: *//; s/\r//')
-    TEST_TARGET_NAME=$(grep -A1 '^test_target:' "$test_file" | grep 'name:' | sed 's/.*name: *//; s/\r//')
+    TEST_TARGET_TYPE=$(grep -A2 '^test_target:' "$test_file" | grep 'type:' | sed 's/.*type: *//; s/\r//')
+    TEST_TARGET_NAME=$(grep -A2 '^test_target:' "$test_file" | grep 'name:' | sed 's/.*name: *//; s/\r//')
     # shellcheck disable=SC2034  # Used by run-docker-test.sh
     TEST_PROMPT=$(grep -A1 '^input:' "$test_file" | grep 'prompt:' | sed 's/.*prompt: *//; s/"//g; s/\r//')
     TEST_TIMEOUT=$(grep '^timeout:' "$test_file" | awk '{print $2}')

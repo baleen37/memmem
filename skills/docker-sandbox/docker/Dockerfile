@@ -39,6 +39,3 @@ USER claude
 
 # Verify Claude Code works as non-root
 RUN claude --help
-
-# Set default entrypoint
-ENTRYPOINT ["/usr/bin/env", "bash"]
