@@ -23,7 +23,7 @@ teardown() {
     source "$DOCKER_SANDBOX_DIR/scripts/lib/docker-helpers.sh"
 
     run check_docker_available
-    assert_success
+    [ "$status" -eq 0 ]
 }
 
 @test "docker-helpers.sh: check_docker_available returns false when Docker is not available" {
@@ -36,7 +36,7 @@ teardown() {
     source "$DOCKER_SANDBOX_DIR/scripts/lib/docker-helpers.sh"
 
     run check_docker_available
-    assert_failure
+    [ "$status" -ne 0 ]
 
     # Restore PATH
     PATH="$OLD_PATH"
@@ -57,17 +57,17 @@ teardown() {
 
     # Verify container exists and is running
     run container_exists "$container_name"
-    assert_success
+    [ "$status" -eq 0 ]
 
     run container_running "$container_name"
-    assert_success
+    [ "$status" -eq 0 ]
 
     # Cleanup
     cleanup_container "$container_name"
 
     # Verify cleanup
     run container_exists "$container_name"
-    assert_failure
+    [ "$status" -ne 0 ]
 }
 
 @test "test-helpers.sh: verify_contains checks all expected strings" {
@@ -76,17 +76,17 @@ teardown() {
     local output="This is a test output with multiple lines"
 
     run verify_contains "$output" "test output" "multiple"
-    assert_success
+    [ "$status" -eq 0 ]
 
     run verify_contains "$output" "test output" "NOTPRESENT"
-    assert_failure
+    [ "$status" -ne 0 ]
 }
 
 @test "run-docker-test.sh: script exists and is executable" {
     local script="$DOCKER_SANDBOX_DIR/scripts/run-docker-test.sh"
 
-    assert_file_exists "$script"
-    assert_file_executable "$script"
+    [ -f "$script" ]
+    [ -x "$script" ]
 }
 
 @test "run-docker-test.sh: shows usage when called without arguments" {
@@ -97,8 +97,8 @@ teardown() {
     local script="$DOCKER_SANDBOX_DIR/scripts/run-docker-test.sh"
 
     run "$script"
-    assert_failure
-    assert_output --partial "Usage:"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Usage:"* ]]
 }
 
 @test "run-docker-test.sh: skips when test file not found" {
@@ -109,6 +109,6 @@ teardown() {
     local script="$DOCKER_SANDBOX_DIR/scripts/run-docker-test.sh"
 
     run "$script" "/nonexistent/test.yaml"
-    assert_failure
-    assert_output --partial "not found"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"not found"* ]]
 }

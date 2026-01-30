@@ -51,7 +51,7 @@ echo "========================================"
 CONTAINER_NAME="claude-test-$$-$RANDOM"
 
 # Cleanup trap
-trap "cleanup_container '$CONTAINER_NAME'" EXIT
+trap 'cleanup_container "$CONTAINER_NAME"' EXIT
 
 # 1. Check Docker availability
 if ! check_docker_available; then
