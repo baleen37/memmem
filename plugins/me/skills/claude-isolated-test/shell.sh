@@ -77,6 +77,20 @@ attach_container_claude() {
     docker exec -it "$container_name" tmux new-session -A -s claude
 }
 
+list_sessions() {
+    local container_name="$1"
+
+    if ! container_running "$container_name"; then
+        echo "Error: Container $container_name is not running" >&2
+        return 1
+    fi
+
+    if ! docker exec "$container_name" tmux list-sessions 2>/dev/null; then
+        echo "No active tmux sessions in container: $container_name" >&2
+        return 1
+    fi
+}
+
 # ===== MAIN LOGIC =====
 usage() {
     echo "Usage: $0 [options]" >&2
@@ -87,6 +101,7 @@ usage() {
     echo "  -n, --name NAME      Container name (default: claude-dev)" >&2
     echo "  -i, --image IMAGE    Docker image name (default: claude-test:latest)" >&2
     echo "  -w, --workspace DIR  Workspace directory to mount (default: current dir)" >&2
+    echo "  -l, --list-sessions  List active tmux sessions in the container" >&2
     echo "  -s, --stop-only      Stop and remove the container without attaching" >&2
     echo "  -h, --help           Show this help" >&2
     exit 1
@@ -94,16 +109,28 @@ usage() {
 
 # Parse arguments
 STOP_ONLY=false
+LIST_SESSIONS=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -n|--name) CONTAINER_NAME="$2"; shift 2 ;;
         -i|--image) IMAGE_NAME="$2"; shift 2 ;;
         -w|--workspace) WORKSPACE="$2"; shift 2 ;;
+        -l|--list-sessions) LIST_SESSIONS=true; shift ;;
         -s|--stop-only) STOP_ONLY=true; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown option: $1" >&2; usage ;;
     esac
 done
+
+# List-sessions mode
+if [ "$LIST_SESSIONS" = true ]; then
+    if ! check_docker_available; then
+        echo "Error: Docker is not available or not running" >&2
+        exit 1
+    fi
+    list_sessions "$CONTAINER_NAME"
+    exit $?
+fi
 
 # Stop-only mode
 if [ "$STOP_ONLY" = true ]; then
