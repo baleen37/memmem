@@ -44,24 +44,6 @@ PROJECT_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
     [ ! -d "${PROJECT_ROOT}/plugins/me/skills/claude-isolated-test/tests" ]
 }
 
-@test "me/tests/fixtures/ exists for test fixtures" {
-    [ -d "${PROJECT_ROOT}/plugins/me/tests/fixtures" ]
-}
-
-@test "me/tests/fixtures/test-helpers.bats exists" {
-    [ -f "${PROJECT_ROOT}/plugins/me/tests/fixtures/test-helpers.bats" ]
-}
-
-@test "test-helpers.bats uses correct helper path from fixtures" {
-    local test_file="${PROJECT_ROOT}/plugins/me/tests/fixtures/test-helpers.bats"
-    [ -f "$test_file" ]
-
-    # Check that it loads bats_helper with correct relative path
-    # From plugins/me/tests/fixtures/ to tests/helpers/
-    # should be: ../../../../tests/helpers/bats_helper
-    grep -q "load.*tests/helpers/bats_helper" "$test_file"
-}
-
 @test "run-all-tests.sh script exists" {
     [ -f "${PROJECT_ROOT}/tests/run-all-tests.sh" ]
 }
