@@ -1,5 +1,5 @@
 ---
-name: claude-isolated-test
+name: isolated-test-guide
 description: Docker 컨테이너에서 Claude Code를 대화형으로 테스트
 ---
 
