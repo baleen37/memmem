@@ -23,6 +23,8 @@ jobs:
       - name: Setup Bats and bats libs
         id: setup-bats
         uses: bats-core/bats-action@3.0.1
+        with:
+          cache: false
 
       - name: Run all tests
         shell: bash
