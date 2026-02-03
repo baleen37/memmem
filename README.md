@@ -17,6 +17,24 @@ into the Claude Code plugin ecosystem.
 - **Date Filtering**: Search within specific time ranges
 - **Conversation Reading**: Full conversation retrieval with pagination
 
+## Skills
+
+### `remembering-conversations`
+
+A skill that guides Claude to search conversation history before reinventing solutions or repeating mistakes.
+
+**When to use:**
+
+- User asks "how should I..." or "what's the best approach..."
+- You're stuck after investigating a problem
+- User references past work ("last time", "we discussed", etc.)
+- Need to follow an unfamiliar workflow
+
+**Core principle:** Search before reinventing. Searching costs nothing; reinventing or repeating mistakes costs
+everything.
+
+See `skills/remembering-conversations/SKILL.md` for complete usage guide.
+
 ## MCP Tools
 
 ### `conversation-memory__search`
