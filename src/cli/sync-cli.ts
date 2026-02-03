@@ -67,14 +67,28 @@ console.log(`Destination: ${destDir}\n`);
 
 syncConversations(sourceDir, destDir)
   .then(result => {
-    console.log(`\n✅ Sync complete!`);
+    console.log(`\nSync complete!`);
     console.log(`  Copied: ${result.copied}`);
     console.log(`  Skipped: ${result.skipped}`);
     console.log(`  Indexed: ${result.indexed}`);
     console.log(`  Summarized: ${result.summarized}`);
 
+    if (result.tokenUsage) {
+      const totalInput = result.tokenUsage.input_tokens + (result.tokenUsage.cache_read_input_tokens || 0);
+      const totalOutput = result.tokenUsage.output_tokens;
+      const cacheCreate = result.tokenUsage.cache_creation_input_tokens || 0;
+
+      console.log(`\nToken Usage (this run):`);
+      console.log(`  Input: ${totalInput.toLocaleString()}`);
+      console.log(`  Output: ${totalOutput.toLocaleString()}`);
+      if (cacheCreate > 0) {
+        console.log(`  Cache created: ${cacheCreate.toLocaleString()}`);
+      }
+      console.log(`  Total: ${(totalInput + totalOutput + cacheCreate).toLocaleString()} tokens`);
+    }
+
     if (result.errors.length > 0) {
-      console.log(`\n⚠️  Errors: ${result.errors.length}`);
+      console.log(`\nErrors: ${result.errors.length}`);
       result.errors.forEach(err => console.log(`  ${err.file}: ${err.error}`));
     }
   })
