@@ -247,18 +247,29 @@ export const astGrepSearchTool: AstToolDefinition<z.ZodObject<{
   name: "ast_grep_search",
   description: `Search for code patterns using AST matching. More precise than text search.
 
-Use meta-variables in patterns:
-- $NAME - matches any single AST node (identifier, expression, etc.)
-- $$$ARGS - matches multiple nodes (for function arguments, list items, etc.)
+Meta-variables: $VAR (single), $$$VAR (multi-list), $$VAR (single/single-field)
 
-Examples:
-- "function $NAME($$$ARGS)" - find all function declarations
-- "console.log($MSG)" - find all console.log calls
-- "if ($COND) { $$$BODY }" - find all if statements
-- "$X === null" - find null equality checks
-- "import $$$IMPORTS from '$MODULE'" - find imports
+Language examples (patterns must be complete, valid code):
 
-Note: Patterns must be valid AST nodes for the language.`,
+Python: "def $NAME($$$ARGS): $$BODY", "class $NAME: $$BODY", "if $COND: $$BODY", "$X = $Y"
+JavaScript: "function $NAME($$$ARGS) { $$BODY }", "const $NAME = $VALUE", "console.log($MSG)", "if ($COND) { $$BODY }"
+TypeScript: "function $NAME($$$ARGS): $RET { $$BODY }", "const $NAME: $TYPE = $VALUE", "interface $NAME { $$MEMBERS }"
+Tsx: "function $NAME($$$ARGS) { $$BODY }", "const $NAME = $VALUE"
+Ruby: "def $NAME($$$ARGS); $$BODY; end", "class $NAME; $$BODY; end"
+Go: "func $NAME($$$ARGS) $RET { $$BODY }", "type $NAME struct { $$FIELDS }"
+Rust: "fn $NAME($$$ARGS) $RET { $$BODY }", "struct $NAME { $$FIELDS }"
+Java: "void $NAME($$$ARGS) { $$BODY }", "class $NAME { $$BODY }"
+Kotlin: "fun $NAME($$$ARGS): $RET { $$BODY }", "class $NAME { $$BODY }"
+Swift: "func $NAME($$$ARGS) -> $RET { $$BODY }", "class $NAME { $$BODY }"
+C: "$RET $NAME($$$ARGS) { $$BODY }", "struct $NAME { $$FIELDS };"
+C++: "$RET $NAME($$$ARGS) { $$BODY }", "class $NAME { $$BODY };"
+C#: "$RET $NAME($$$ARGS) { $$BODY }", "class $NAME { $$BODY }"
+HTML: "<$TAG>$$BODY</$TAG>", "<$TAG $ATTRS />"
+CSS: ".$CLASS { $$PROPS }", "$PROP: $VALUE"
+JSON: '"$KEY": $VALUE', '"$KEY": "$STRING"'
+YAML: '$KEY: $VALUE', '$KEY: "$STRING"'
+
+Test patterns: https://ast-grep.github.io/playground`,
   schema: z.object({
     pattern: z
       .string()
@@ -395,16 +406,21 @@ export const astGrepReplaceTool: AstToolDefinition<z.ZodObject<{
   name: "ast_grep_replace",
   description: `Replace code patterns using AST matching. Preserves matched content via meta-variables.
 
-Use meta-variables in both pattern and replacement:
-- $NAME in pattern captures a node, use $NAME in replacement to insert it
-- $$$ARGS captures multiple nodes
+Meta-variables: Use $NAME in pattern to capture, $NAME in replacement to insert
 
-Examples:
-- Pattern: "console.log($MSG)" → Replacement: "logger.info($MSG)"
-- Pattern: "var $NAME = $VALUE" → Replacement: "const $NAME = $VALUE"
-- Pattern: "$OBJ.forEach(($ITEM) => { $$$BODY })" → Replacement: "for (const $ITEM of $OBJ) { $$$BODY }"
+Language examples (pattern → replacement):
 
-IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to apply.`,
+Python: "def $NAME($$$ARGS): $$BODY" → "def new_$NAME($$$ARGS): $$BODY"
+JavaScript: "var $NAME = $VALUE" → "const $NAME = $VALUE"
+JavaScript: "console.log($MSG)" → "logger.info($MSG)"
+JavaScript: "$OBJ.forEach(($ITEM) => { $$BODY })" → "for (const $ITEM of $OBJ) { $$BODY }"
+TypeScript: "interface $NAME { $$PROPS }" → "type $NAME = { $$PROPS }"
+Go: "func $NAME($$$ARGS) $RET { $$BODY }" → "func ($RECV) $NAME($$$ARGS) $RET { $$BODY }"
+Rust: "fn $NAME($$$ARGS) -> $RET { $$BODY }" → "fn $NAME(&self, $$$ARGS) -> $RET { $$BODY }"
+
+IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to apply.
+
+Test patterns: https://ast-grep.github.io/playground`,
   schema: z.object({
     pattern: z.string().describe("Pattern to match"),
     replacement: z
