@@ -505,15 +505,43 @@ Test patterns: https://ast-grep.github.io/playground`,
             // Try to get named captures
             try {
               // Replace meta-variables in the replacement string
-              const metaVars = replacement.match(/\$\$?\$?[A-Z_][A-Z0-9_]*/g) || [];
+              // Match $NAME, $$NAME, or $$$NAME patterns
+              // The pattern \${1,3} matches 1 to 3 dollar signs
+              const metaVars = replacement.match(/\${1,3}[A-Z_][A-Z0-9_]*/g) || [];
               for (const metaVar of metaVars) {
                 const varName = metaVar.replace(/^\$+/, "");
-                const captured = match.getMatch(varName);
-                if (captured) {
-                  finalReplacement = finalReplacement.replace(
-                    metaVar,
-                    captured.text(),
-                  );
+
+                if (metaVar.startsWith('$$$')) {
+                  // Multi meta-variable ($$$ARGS, $$$BODY) - use getMultipleMatches
+                  // ast-grep returns each argument AND comma as separate nodes
+                  // Example: logger('hello', 'world', '!') → ['hello', ',', 'world', ',', '!']
+                  // We need to preserve whitespace between nodes, so we extract the full range
+                  const nodes = match.getMultipleMatches(varName);
+                  if (nodes && nodes.length > 0) {
+                    // Get the full text range including whitespace between nodes
+                    const firstNode = nodes[0];
+                    const lastNode = nodes[nodes.length - 1];
+                    const firstRange = firstNode.range();
+                    const lastRange = lastNode.range();
+
+                    // Extract text from the original source content
+                    // This preserves all whitespace between nodes
+                    const text = content.slice(firstRange.start.index, lastRange.end.index);
+                    finalReplacement = finalReplacement.replace(metaVar, text);
+                  } else {
+                    // Empty multi-variable (e.g., empty args list or empty body)
+                    // Replace with empty string
+                    finalReplacement = finalReplacement.replace(metaVar, "");
+                  }
+                } else {
+                  // Single meta-variable ($NAME, $VALUE) - use getMatch
+                  const captured = match.getMatch(varName);
+                  if (captured) {
+                    finalReplacement = finalReplacement.replace(
+                      metaVar,
+                      captured.text(),
+                    );
+                  }
                 }
               }
             } catch {
