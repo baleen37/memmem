@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { SUMMARIZER_CONTEXT_MARKER } from './constants.js';
 import { getExcludedProjects } from './paths.js';
+import type { TokenUsage } from './summarizer.js';
 
 const EXCLUSION_MARKERS = [
   '<INSTRUCTIONS-TO-EPISODIC-MEMORY>DO NOT INDEX THIS CHAT</INSTRUCTIONS-TO-EPISODIC-MEMORY>',
@@ -25,12 +26,29 @@ export interface SyncResult {
   indexed: number;
   summarized: number;
   errors: Array<{ file: string; error: string }>;
+  tokenUsage?: TokenUsage;
 }
 
 export interface SyncOptions {
   skipIndex?: boolean;
   skipSummaries?: boolean;
   summaryLimit?: number; // Max summaries to generate per run (default: 10)
+}
+
+function sumTokenUsage(usages: TokenUsage[]): TokenUsage {
+  return usages.reduce((acc, usage) => ({
+    input_tokens: acc.input_tokens + (usage.input_tokens || 0),
+    output_tokens: acc.output_tokens + (usage.output_tokens || 0),
+    cache_read_input_tokens: (acc.cache_read_input_tokens || 0) + (usage.cache_read_input_tokens || 0),
+    cache_creation_input_tokens: (acc.cache_creation_input_tokens || 0) + (usage.cache_creation_input_tokens || 0),
+  }), { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 });
+}
+
+function formatTokenUsage(usage: TokenUsage): string {
+  const totalInput = usage.input_tokens + (usage.cache_read_input_tokens || 0);
+  const totalOutput = usage.output_tokens;
+  const cacheCreate = usage.cache_creation_input_tokens || 0;
+  return `${totalInput.toLocaleString()} in | ${totalOutput.toLocaleString()} out${cacheCreate > 0 ? ` | ${cacheCreate.toLocaleString()} cache created` : ''}`;
 }
 
 function copyIfNewer(src: string, dest: string): boolean {
@@ -78,6 +96,10 @@ export async function syncConversations(
     summarized: 0,
     errors: []
   };
+
+  // Start token tracking for this sync run
+  const { startTokenTracking, getCurrentRunTokenUsage } = await import('./summarizer.js');
+  startTokenTracking();
 
   // Ensure source directory exists
   if (!fs.existsSync(sourceDir)) {
@@ -215,6 +237,9 @@ export async function syncConversations(
       }
     }
   }
+
+  // Get total token usage for this sync run
+  result.tokenUsage = getCurrentRunTokenUsage();
 
   return result;
 }
