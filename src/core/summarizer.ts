@@ -35,7 +35,6 @@ export interface SummaryWithUsage {
  *
  * Env vars (all optional):
  * - CONVERSATION_MEMORY_API_MODEL: Model to use (default: haiku)
- * - CONVERSATION_MEMORY_API_MODEL_FALLBACK: Fallback model on error (default: sonnet)
  * - CONVERSATION_MEMORY_API_BASE_URL: Custom API endpoint
  * - CONVERSATION_MEMORY_API_TOKEN: Auth token for custom endpoint
  * - CONVERSATION_MEMORY_API_TIMEOUT_MS: Timeout for API calls (default: SDK default)
@@ -99,10 +98,8 @@ function formatTokenUsage(usage: TokenUsage): string {
   return parts.join(' | ');
 }
 
-async function callClaude(prompt: string, sessionId?: string, useFallback = false): Promise<SummaryWithUsage> {
-  const primaryModel = process.env.CONVERSATION_MEMORY_API_MODEL || 'haiku';
-  const fallbackModel = process.env.CONVERSATION_MEMORY_API_MODEL_FALLBACK || 'sonnet';
-  const model = useFallback ? fallbackModel : primaryModel;
+async function callClaude(prompt: string, sessionId?: string): Promise<SummaryWithUsage> {
+  const model = process.env.CONVERSATION_MEMORY_API_MODEL || 'haiku';
 
   const apiEnv = getApiEnv();
   const apiUrl = apiEnv?.ANTHROPIC_BASE_URL || 'default';
@@ -125,16 +122,6 @@ async function callClaude(prompt: string, sessionId?: string, useFallback = fals
   })) {
     if (message && typeof message === 'object' && 'type' in message && message.type === 'result') {
       const result = (message as any).result;
-
-      // Check if result is an API error (SDK returns errors as result strings)
-      if (typeof result === 'string' && result.includes('API Error') && result.includes('thinking.budget_tokens')) {
-        if (!useFallback) {
-          console.log(`    ${primaryModel} hit thinking budget error, retrying with ${fallbackModel}`);
-          return await callClaude(prompt, sessionId, true);
-        }
-        // If fallback also fails, throw error to prevent error messages from being saved as summaries
-        throw new Error(`Both ${primaryModel} and ${fallbackModel} hit thinking budget limits. Summary generation failed.`);
-      }
 
       // Extract token usage from result message
       const usage = (message as any).usage || { input_tokens: 0, output_tokens: 0 };
