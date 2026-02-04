@@ -1,14 +1,13 @@
 {
-  "description": "Auto-install dependencies on first use",
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "*",
+        "matcher": "startup|resume",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/install-deps.sh",
-            "timeout": 120
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/cli.mjs sync",
+            "async": true
           }
         ]
       }

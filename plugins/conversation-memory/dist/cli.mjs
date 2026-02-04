@@ -38530,10 +38530,8 @@ function formatTokenUsage(usage) {
   }
   return parts.join(" | ");
 }
-async function callClaude(prompt, sessionId, useFallback = false) {
-  const primaryModel = process.env.CONVERSATION_MEMORY_API_MODEL || "haiku";
-  const fallbackModel = process.env.CONVERSATION_MEMORY_API_MODEL_FALLBACK || "sonnet";
-  const model = useFallback ? fallbackModel : primaryModel;
+async function callClaude(prompt, sessionId) {
+  const model = process.env.CONVERSATION_MEMORY_API_MODEL || "haiku";
   const apiEnv = getApiEnv();
   const apiUrl = apiEnv?.ANTHROPIC_BASE_URL || "default";
   const hasToken = !!apiEnv?.ANTHROPIC_AUTH_TOKEN;
@@ -38554,16 +38552,6 @@ async function callClaude(prompt, sessionId, useFallback = false) {
   })) {
     if (message && typeof message === "object" && "type" in message && message.type === "result") {
       const result = message.result;
-      if (typeof result === "string" && result.includes("API Error") && result.includes("thinking.budget_tokens")) {
-        if (!useFallback) {
-          console.log(`    ${primaryModel} hit thinking budget error, retrying with ${fallbackModel}`);
-          return await callClaude(prompt, sessionId, true);
-        }
-        return {
-          summary: result,
-          tokens: { input_tokens: 0, output_tokens: 0 }
-        };
-      }
       const usage = message.usage || { input_tokens: 0, output_tokens: 0 };
       const tokenUsage = {
         input_tokens: usage.input_tokens || 0,
@@ -38590,15 +38578,26 @@ function chunkExchanges(exchanges, chunkSize) {
   }
   return chunks;
 }
-async function summarizeConversation(exchanges, sessionId) {
+function isTrivialConversation(exchanges) {
   if (exchanges.length === 0) {
-    return "Trivial conversation with no substantive content.";
+    return true;
   }
   if (exchanges.length === 1) {
-    const text = formatConversationText(exchanges);
-    if (text.length < 100 || exchanges[0].userMessage.trim() === "/exit") {
-      return "Trivial conversation with no substantive content.";
+    const userMsg = exchanges[0].userMessage.trim();
+    const assistantMsg = exchanges[0].assistantMessage.trim();
+    if (userMsg === "/exit") {
+      return true;
     }
+    const wordCount = (userMsg + " " + assistantMsg).split(/[\s\u3000-\u303F\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]+/).filter((word) => word.length > 0).length;
+    if (wordCount < 15) {
+      return true;
+    }
+  }
+  return false;
+}
+async function summarizeConversation(exchanges, sessionId) {
+  if (isTrivialConversation(exchanges)) {
+    return "Trivial conversation with no substantive content.";
   }
   const allTokenUsages = [];
   if (exchanges.length <= 15) {

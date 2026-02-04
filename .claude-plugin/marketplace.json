@@ -78,19 +78,6 @@
       "version": "4.2.0"
     },
     {
-      "name": "context-restore",
-      "description": "Automatic session context restore - saves context at session end and restores relevant context at session start",
-      "source": "./plugins/context-restore",
-      "category": "productivity",
-      "tags": [
-        "memory",
-        "persistence",
-        "context",
-        "session"
-      ],
-      "version": "4.2.0"
-    },
-    {
       "name": "ralph-loop",
       "description": "Continuous self-referential AI loops for interactive iterative development, implementing the Ralph Wiggum technique",
       "source": "./plugins/ralph-loop",
