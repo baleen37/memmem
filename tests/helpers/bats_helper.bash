@@ -4,6 +4,7 @@
 # Project root directory
 # BATS_TEST_DIRNAME is the directory containing the test file
 # We need to find the project root from wherever the test is running
+# shellcheck disable=SC2155
 if [ -f "${BATS_TEST_DIRNAME}/../../helpers/bats_helper.bash" ]; then
     # Running from tests/ directory (legacy)
     export PROJECT_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
@@ -24,7 +25,7 @@ else
     elif [ -L "${script_dir}/${script_name}.bash" ]; then
         # Handle case where script_name doesn't have .bash but the link does
         resolved="$(cd "${script_dir}" && \
-                   cd "$(dirname "$(readlink "${script_dir}/${script_name}.bash")")" && \
+                   cd "$(dirname "$(readlink "${script_dir}/${script_name}.bash}")")" && \
                    cd "../.." && pwd)"
         export PROJECT_ROOT="$resolved"
     else
@@ -36,6 +37,7 @@ fi
 JQ_BIN="${JQ_BIN:-jq}"
 
 # Setup function - runs before each test
+# shellcheck disable=SC2155
 setup() {
     # Create temp directory for test-specific files
     export TEST_TEMP_DIR=$(mktemp -d -t claude-plugins-test.XXXXXX)
@@ -110,6 +112,7 @@ count_files() {
 
 # Helper: Check if JSON field is allowed in plugin.json
 # Claude Code only supports: name, description, author, version, license, homepage, repository, keywords
+# shellcheck disable=SC2076
 json_field_is_allowed() {
     local field="$1"
     local allowed_fields="name description author version license homepage repository keywords"
@@ -117,6 +120,7 @@ json_field_is_allowed() {
 }
 
 # Helper: Check if author field is allowed (author.name, author.email)
+# shellcheck disable=SC2076
 json_author_field_is_allowed() {
     local field="$1"
     local allowed_author_fields="name email"
@@ -250,5 +254,50 @@ assert_matches() {
         echo "  Value:    $value" >&2
         echo "  Pattern:  $regex" >&2
         return 1
+    fi
+}
+
+# Helper: Assert success (exit code 0)
+# Usage: assert_success
+# shellcheck disable=SC2154
+assert_success() {
+    if [ "${status:-}" != 0 ]; then
+        echo "Assertion failed: Command should succeed (exit code 0)" >&2
+        echo "  Exit code: $status" >&2
+        echo "  Output: $output" >&2
+        return 1
+    fi
+}
+
+# Helper: Assert failure (exit code not 0)
+# Usage: assert_failure
+# shellcheck disable=SC2154
+assert_failure() {
+    if [ "${status:-}" = 0 ]; then
+        echo "Assertion failed: Command should fail (exit code not 0)" >&2
+        echo "  Exit code: $status" >&2
+        echo "  Output: $output" >&2
+        return 1
+    fi
+}
+
+# Helper: Assert output contains partial string
+# Usage: assert_output --partial "substring"
+# shellcheck disable=SC2154
+assert_output() {
+    local expected="$1"
+    if [ "$expected" = "--partial" ]; then
+        local substring="$2"
+        if [[ ! "$output" == *"$substring"* ]]; then
+            echo "Assertion failed: Output should contain '$substring'" >&2
+            echo "  Output: $output" >&2
+            return 1
+        fi
+    else
+        if [ "$output" != "$expected" ]; then
+            echo "Assertion failed: Output should equal '$expected'" >&2
+            echo "  Output: $output" >&2
+            return 1
+        fi
     fi
 }

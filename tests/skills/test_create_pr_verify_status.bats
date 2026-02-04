@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # Test suite for create-pr skill's verify-pr-status.sh script
 
+load '../helpers/bats_helper'
 load '../helpers/setup'
 
 setup() {
@@ -15,9 +16,9 @@ teardown() {
 # Test: Script requires base branch argument
 @test "verify-pr-status.sh requires base branch argument" {
   run "$SCRIPT"
-  assert_failure
-  assert_output --partial "ERROR: Base branch required"
-  assert_output --partial "Usage:"
+  [ $status -ne 0 ]
+  [[ "$output" == *"ERROR: Base branch required"* ]]
+  [[ "$output" == *"Usage:"* ]]
 }
 
 # Test: Script is executable
@@ -28,36 +29,36 @@ teardown() {
 # Test: Script uses set -euo pipefail
 @test "verify-pr-status.sh uses strict error handling" {
   run grep -q "set -euo pipefail" "$SCRIPT"
-  assert_success
+  [ $status -eq 0 ]
 }
 
 # Test: Script exit codes are documented
 @test "verify-pr-status.sh documents exit codes" {
   run grep -A 3 "Exit codes:" "$SCRIPT"
-  assert_success
-  assert_output --partial "0 - PR is merge-ready"
-  assert_output --partial "1 - Error"
-  assert_output --partial "2 - Pending"
+  [ $status -eq 0 ]
+  [[ "$output" == *"0 - PR is merge-ready"* ]]
+  [[ "$output" == *"1 - Error"* ]]
+  [[ "$output" == *"2 - Pending"* ]]
 }
 
 # Test: Script checks required CI checks
 @test "verify-pr-status.sh checks required CI status" {
   run grep -q "isRequired==true" "$SCRIPT"
-  assert_success
+  [ $status -eq 0 ]
 }
 
 # Test: Script handles BEHIND with retry
 @test "verify-pr-status.sh has retry logic for BEHIND" {
   run grep -q "MAX_RETRIES=3" "$SCRIPT"
-  assert_success
+  [ $status -eq 0 ]
   run grep -q "RETRY_COUNT" "$SCRIPT"
-  assert_success
+  [ $status -eq 0 ]
 }
 
 # Test: Script lists conflict files
 @test "verify-pr-status.sh lists conflict files on DIRTY" {
   run grep -q "git diff --name-only --diff-filter=U" "$SCRIPT"
-  assert_success
+  [ $status -eq 0 ]
 }
 
 # Mock test: Simulate CLEAN status with passing CI

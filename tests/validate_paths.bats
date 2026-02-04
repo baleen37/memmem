@@ -2,21 +2,16 @@
 # Test suite for path portability validation
 
 load helpers/bats_helper
+load helpers/setup
 
 setup() {
-    # Create temp directory for test-specific files
-    export TEST_TEMP_DIR=$(mktemp -d -t claude-plugins-test.XXXXXX)
-
-    # Create test files with various path patterns
+    setup_test_temp
     export TEST_DIR="${TEST_TEMP_DIR}/path_tests"
     mkdir -p "$TEST_DIR"
 }
 
 teardown() {
-    # Clean up temp directory
-    if [ -n "${TEST_TEMP_DIR:-}" ] && [ -d "$TEST_TEMP_DIR" ]; then
-        rm -rf "$TEST_TEMP_DIR"
-    fi
+    teardown_test_temp
 }
 
 @test "detects hardcoded absolute paths in JSON files" {

@@ -11,9 +11,11 @@ Evidence-based exploration: **Observe → Explore → Verify → Summarize**.
 
 **Core principle:** 30 minutes of targeted research beats hours of wrong implementation.
 
+**CRITICAL: Verification is MANDATORY.** Reading code is NOT research. Testing behavior IS research.
+
 ## When to Use
 
-```
+```text
 Need to understand before acting?
     │
     ├─ Unfamiliar codebase/architecture? → YES
@@ -23,12 +25,14 @@ Need to understand before acting?
 ```
 
 **Use for:**
+
 - Understanding requirements before implementation
 - Investigating root causes
 - Learning new domains
 - Comparing approaches
 
 **Don't use for:**
+
 - Routine fixes in familiar code
 - Well-documented APIs you know
 - Simple mechanical changes
@@ -47,6 +51,7 @@ Need to understand before acting?
 ### Why Subagents?
 
 Research benefits from subagent delegation:
+
 - **Fresh context** per research question (no contamination)
 - **Parallel execution** of independent research tracks
 - **Cost efficiency** using Haiku for focused tasks
@@ -75,24 +80,31 @@ Research benefits from subagent delegation:
 
 ### For Codebase Research
 
+**MANDATORY: ALWAYS use Explore agent for codebase exploration.**
+
 **DO:**
+
 ```markdown
 Task tool with subagent_type="Explore", description="Search codebase for X implementation patterns"
 ```
 
-**DON'T:**
-- Use Grep/Glob directly for exploration (slow, single-source)
+**NEVER:**
+
+- Manual Grep/Glob for exploration - ALWAYS delegate to Explore agent
 - Use Explore agent for web search (it has no web tools)
 - Use general-purpose agent when Explore is specialized for codebase
+- Do research yourself - subagents provide fresh context and parallel execution
 
 ### For Web Research
 
 **DO:**
+
 ```markdown
 Task tool with subagent_type="me:web-researcher", description="Find official documentation for X framework"
 ```
 
 **DON'T:**
+
 - Use built-in WebSearch tool (use web-researcher agent instead)
 - Skip version context (always specify version when relevant)
 - Rely on single source (web-researcher will cross-reference)
@@ -119,86 +131,149 @@ Identify: Gaps, anti-patterns, version mismatches
 
 **Cross-reference threshold:** Verify with 3+ independent sources before concluding.
 
+**VERIFICATION REQUIREMENT:** Reading code is NOT sufficient. You MUST verify behavior through:
+
+- Running the code
+- Testing with actual inputs
+- Cross-referencing official documentation
+- Checking multiple independent sources
+
 **Insufficient evidence:**
-- "Read the code, it does X" → Which files? Which lines?
-- "This approach works" → Tested? Verified?
+
+- "Read the code, it does X" → Did you RUN it? Did you TEST it?
+- "This approach works" → Tested? Verified? With what inputs?
 - "Confident based on experience" → Experience ≠ verification
 - Single source without verification → Cross-reference required
+- Code reading only → Must verify actual behavior
+- "The code shows..." → What does EXECUTION show?
 
 **Sufficient evidence:**
-- "lib/state.sh:45-52 validates session_id with regex `^[a-zA-Z0-9_-]+$`"
-- "Tested with empty session_id → exits with error code 1"
-- "Verified against official docs v5.3.0"
-- Cross-referenced across 3+ sources with consistent findings
+
+- "lib/state.sh:45-52 validates session_id with regex"
+
+  `^[a-zA-Z0-9_-]+$`
+
+  "+ Tested with empty session_id → exits with error code 1"
+- "Verified against official docs v5.3.0" + "Tested with production data"
+- Cross-referenced across 3+ sources with consistent findings + verified with execution
+
+**Evidence hierarchy (strongest to weakest):**
+
+1. **Tested behavior** - Ran code, observed results
+2. **Official documentation** - Version-specific, authoritative
+3. **Cross-referenced patterns** - Multiple sources agree
+4. **Code reading** - NOT sufficient alone, must verify
 
 **Negative evidence:** Explicitly document what's NOT there:
+
 - "No 'prompt' or 'agent' hook type examples found in codebase"
 - "No locking mechanism exists despite concurrent execution"
 - "No test coverage for parallel execution scenarios"
+- "Searched for X pattern across Y files - none found"
 
 ## Rationalization (REJECT ALL)
 
 | Excuse | Reality |
 |--------|---------|
-| "Code review is enough" | Code ≠ behavior. Test it. |
 | "User wants fast answer" | Fast right > fast wrong. Rework takes longer. |
+| "I'll search quickly myself" | Manual search = slow + single-perspective. Use subagents. |
+| "Sequential is fine" | Independent research = parallel. Don't waste time. |
+| "General-purpose agent is safer" | Specialized agents (Explore, web-researcher) are more focused. |
 | "This is straightforward" | Simple still requires verification. Don't guess. |
 | "Confident based on experience" | Confidence ≠ correctness. Verify with evidence. |
-| "Too much to read" | 30 min targeted research vs hours of rework. |
+| "Read the code, that's enough" | Reading ≠ verification. Must RUN and TEST. |
+| "The code shows X" | Code ≠ behavior. What does EXECUTION show? |
 | "Logic is sound" | Logical ≠ correct. Reality beats theory. |
-| "Tests pass, must be user error" | Tests may not cover your scenario. Verify actual conditions. |
+| "예/Yes - [assertion]" | Confident assertion without testing = speculation. |
+| "심각한 [problem] 발견" | Without testing? That's speculation, not discovery. |
+| "This part is fine" | How do you know? Verify, don't assume. |
+| "I've seen enough to speculate" | Speculation without evidence is guessing. |
+| "가능한 [X]는..." | Listing possibilities without evidence = guessing. |
 | "Simple read-write can't be broken" | Simple operations have race conditions without synchronization. |
 | "Race conditions are rare" | Rare bugs become common at scale. Verify, don't assume. |
-| "Just add a lock" | Locks add complexity. Verify the problem exists first. |
+| "Found one good example" | Single source = insufficient. Cross-reference 3+ sources. |
+| "Official docs are probably similar" | Probably ≠ verified. Check actual documentation. |
 | "I've seen enough examples" | Patterns may have edge cases you haven't seen. Keep verifying. |
 | "The schema tells me everything" | Schema defines structure, not behavior. Test it. |
+| "Codebase is clear enough" | Codebase ≠ complete picture. Check official docs too. |
+| "Don't need docs for codebase research" | Even codebase research needs external verification. |
 
 ## Red Flags - STOP
 
 These thoughts mean you're rushing or rationalizing:
 
+### Using Wrong Tools (CRITICAL)
+
+- Manual Grep/Glob for exploration → Use Explore agent ALWAYS
+- Direct file reading for research → Delegate to subagents
+- Doing research yourself → Fresh context per subagent > contaminated main context
+- General-purpose when specialized available → Use Explore or web-researcher
+
 ### Subagent Anti-patterns
+
 - "I'll search myself" → Use subagents for research. You synthesize.
 - "Sequential is fine" → Independent research = parallel execution.
 - "Sonnet for everything" → Haiku sufficient for focused research tasks.
 - "Explore agent can search web" → Explore has NO web tools.
-- "mgrep is just for search" → mgrep --web --answer provides synthesis.
 - "General-purpose is safer" → Specialized agents (Explore, web-researcher) are more focused.
 
-### Skipping Verification
-- "Read enough, let's summarize" → Evidence ≠ volume. Quality sources matter.
+### Skipping Verification (CRITICAL VIOLATION)
+
+- "Read code, that's research" → Reading ≠ verification. Must RUN and TEST.
+- "The code shows X" → Code shows intent. Execution shows reality. TEST IT.
+- "Read enough, let's summarize" → Without testing = speculation, not research.
 - "Logic makes sense" → Theory ≠ reality. Test it.
-- "No time to verify" → Verification prevents rework.
+- "No time to verify" → Verification prevents rework. Always cheaper upfront.
+- "Code is clear enough" → Clear code can have unclear behavior. Verify.
+- "심각한 [X] 발견" without testing → Speculation dressed as discovery.
+- Starting "가능한" or "possible" sections → Listing guesses, not findings.
 
 ### Insufficient Evidence
+
 - "I understand the pattern" → Verify in current codebase context.
 - "This is standard practice" → Standard for what? When? Prove it.
 - "Good enough to proceed" → Evidence-based or assumption-based?
+- "Found one good source" → Single source = insufficient. Need 3+.
+- "Confident this is the issue" → Assertion without testing = speculation.
+- "Codebase-only research is enough" → Even codebase needs external verification.
+- "The code documents itself" → Code + official docs + testing = complete picture.
 
 ### Premature Conclusions
+
 - "Findings align with expectation" → Confirmation bias risk. Look for contradictions.
 - "No issues found" → Did you look for edge cases? Error paths? Negative evidence?
 - "Ready to implement" → Are findings documented with sources?
 - "Seen enough examples" → Keep verifying. Patterns may have unseen edge cases.
+- Starting "버그 추측" section → Speculation before full research = wrong approach.
+- "가능한 버그는..." → Listing possible bugs without evidence = guessing.
 
 **Research means evidence-first. Always.**
+
+**Reading code is NOT research. Verification is research.**
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---------|-----|
+| Manual Grep/Glob for exploration | ALWAYS use Explore agent - never do direct file search |
+| Doing research yourself | Delegate to subagents - fresh context per question |
 | Not using subagents for research | Delegate to Explore/web-researcher - faster, cheaper, fresh context |
 | Sequential hybrid research | Run codebase + web research in parallel when independent |
 | Using Sonnet for simple research | Haiku is sufficient and cost-efficient for subagent tasks |
+| Reading code without verification | Reading ≠ research. Must RUN code, TEST behavior, verify results |
+| "The code shows X" conclusions | Code shows intent, execution shows reality. TEST IT. |
 | Single-source reliance | Cross-reference findings from multiple sources (3+ minimum) |
+| Confident assertions without testing | "심각한 [X] 발견" without testing = speculation |
+| Speculation sections | "가능한 버그는...", "possible bugs" = guessing, not research |
 | No documentation | Document as you go with file paths/line numbers or URLs |
 | Skipping edge cases | Explicitly check error paths and boundaries |
 | Logical inference only | Run code, verify actual behavior |
 | Premature recommendations | Findings first, recommendations second |
 | Ignoring negative evidence | Explicitly document what's NOT there or NOT working |
-| Assuming tests cover everything | Tests may miss race conditions, parallel execution |
+| Assuming tests cover everything | Tests may miss race conditions, parallel execution - verify |
 | Schema without verification | Schema defines structure, not behavior. Test it. |
-| Codebase-only research | Check official docs for version-specific behavior |
+| Codebase-only research | Even codebase research needs official docs cross-reference |
+| "Pattern is clear from code" | Code reading ≠ understanding behavior. Test and verify. |
 
 ## Output Format
 

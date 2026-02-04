@@ -2,21 +2,18 @@
 # Test suite for plugin.json manifest validation
 # https://code.claude.com/docs/en/plugins-reference#plugin-manifest
 
+load helpers/setup
 load helpers/bats_helper
 
 setup() {
-    # Create temp directory for test-specific files
-    export TEST_TEMP_DIR=$(mktemp -d -t claude-plugins-test.XXXXXX)
+    setup_test_temp
     export TEST_DIR="${TEST_TEMP_DIR}/manifest_tests"
     mkdir -p "$TEST_DIR"
     ensure_jq
 }
 
 teardown() {
-    # Clean up temp directory
-    if [ -n "${TEST_TEMP_DIR:-}" ] && [ -d "$TEST_TEMP_DIR" ]; then
-        rm -rf "$TEST_TEMP_DIR"
-    fi
+    teardown_test_temp
 }
 
 @test "plugin.json has only allowed top-level fields" {
