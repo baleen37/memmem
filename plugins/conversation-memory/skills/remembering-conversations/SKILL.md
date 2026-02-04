@@ -5,8 +5,31 @@ description: Use when user asks 'how should I...' or 'what's the best approach..
 
 # Remembering Conversations
 
-**Core principle:** Search before reinventing. Searching costs nothing; reinventing or repeating mistakes costs
-everything.
+**Core principle:** Search before reinventing. Searching costs nothing; reinventing or repeating mistakes costs everything.
+
+## Mandatory: Use the Search Agent
+
+**YOU MUST dispatch the search-conversation agent for any historical search.**
+
+Announce: "Dispatching search agent to find [topic]."
+
+Then use the Task tool with `subagent_type: "search-conversation"`:
+
+```text
+Task tool:
+  description: "Search past conversations for [topic]"
+  prompt: "Search for [specific query or topic]. Focus on [what you're looking for - e.g., decisions, patterns, gotchas, code examples]."
+  subagent_type: "search-conversation"
+```
+
+The agent will:
+
+1. Search with the `search` tool
+2. Read top 2-5 results with the `read` tool
+3. Synthesize findings (200-1000 words)
+4. Return actionable insights + sources
+
+**Saves 50-100x context vs. loading raw conversations.**
 
 ## When to Use
 
@@ -37,7 +60,23 @@ in these situations:
 - For info in current conversation
 - Before understanding what you're being asked to do
 
-## How to Search
+## Direct Tool Access (Discouraged)
+
+You CAN use MCP tools directly, but **DON'T**:
+
+- `mcp__plugin_conversation-memory_conversation-memory__search`
+- `mcp__plugin_conversation-memory_conversation-memory__read`
+
+Using these directly wastes your context window. **Always dispatch the agent instead.**
+
+See [MCP-TOOLS.md](./MCP-TOOLS.md) for complete API reference if needed for advanced usage.
+
+## Legacy: How to Search (Discouraged)
+
+**Note:** This section describes direct MCP tool usage, which is discouraged. Use the search-conversation agent instead.
+
+<details>
+<summary>Click to expand legacy direct tool usage instructions</summary>
 
 Use the MCP tools provided by conversation-memory plugin:
 
@@ -151,15 +190,16 @@ User: "How should we implement authentication in the new API?"
 
 ## Important Notes
 
+- **Use the agent** - always dispatch search-conversation agent, never use MCP tools directly
 - **Search costs nothing** - always check before reinventing
 - **Past mistakes are valuable** - learn from failed approaches
 - **Context matters** - past decisions may not apply to new situations
 - **Sources are essential** - always cite conversation paths and dates
-- **Saves 50-100x context** vs. loading raw conversations directly
+- **Agent saves 50-100x context** - synthesized insights vs. raw conversation data
 
-## MCP Tools Reference
+## Further Reading
 
-See README.md for complete API documentation of:
+- [MCP-TOOLS.md](./MCP-TOOLS.md) - Complete MCP tools API reference (advanced usage only)
+- [search-conversation agent](../../agents/search-conversation.md) - Agent implementation details
 
-- `conversation-memory__search`
-- `conversation-memory__read`
+</details>
