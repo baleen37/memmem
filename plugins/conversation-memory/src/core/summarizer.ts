@@ -132,11 +132,8 @@ async function callClaude(prompt: string, sessionId?: string, useFallback = fals
           console.log(`    ${primaryModel} hit thinking budget error, retrying with ${fallbackModel}`);
           return await callClaude(prompt, sessionId, true);
         }
-        // If fallback also fails, return error message
-        return {
-          summary: result,
-          tokens: { input_tokens: 0, output_tokens: 0 }
-        };
+        // If fallback also fails, throw error to prevent error messages from being saved as summaries
+        throw new Error(`Both ${primaryModel} and ${fallbackModel} hit thinking budget limits. Summary generation failed.`);
       }
 
       // Extract token usage from result message
@@ -171,17 +168,43 @@ function chunkExchanges(exchanges: ConversationExchange[], chunkSize: number): C
   return chunks;
 }
 
-export async function summarizeConversation(exchanges: ConversationExchange[], sessionId?: string): Promise<string> {
-  // Handle trivial conversations
+/**
+ * Check if a conversation is trivial (not worth summarizing).
+ * Uses word count instead of character count to handle multilingual content better.
+ */
+function isTrivialConversation(exchanges: ConversationExchange[]): boolean {
   if (exchanges.length === 0) {
-    return 'Trivial conversation with no substantive content.';
+    return true;
   }
 
   if (exchanges.length === 1) {
-    const text = formatConversationText(exchanges);
-    if (text.length < 100 || exchanges[0].userMessage.trim() === '/exit') {
-      return 'Trivial conversation with no substantive content.';
+    const userMsg = exchanges[0].userMessage.trim();
+    const assistantMsg = exchanges[0].assistantMessage.trim();
+
+    // Check for exit command (only /exit is the official command)
+    if (userMsg === '/exit') {
+      return true;
     }
+
+    // Use word count instead of character count for language-agnostic detection
+    // Split on whitespace and CJK characters
+    const wordCount = (userMsg + ' ' + assistantMsg)
+      .split(/[\s\u3000-\u303F\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]+/)
+      .filter(word => word.length > 0).length;
+
+    // Less than 15 words total is considered trivial
+    if (wordCount < 15) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function summarizeConversation(exchanges: ConversationExchange[], sessionId?: string): Promise<string> {
+  // Handle trivial conversations
+  if (isTrivialConversation(exchanges)) {
+    return 'Trivial conversation with no substantive content.';
   }
 
   const allTokenUsages: TokenUsage[] = [];
