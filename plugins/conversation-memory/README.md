@@ -162,6 +162,37 @@ To exclude specific conversation directories from indexing, create a `.no-conver
 touch /path/to/conversation/dir/.no-conversation-memory
 ```
 
+### Environment Variables (Optional)
+
+The plugin supports optional environment variables for customizing the summarization API:
+
+- **`CONVERSATION_MEMORY_API_MODEL`**: Model to use for summarization (default: `haiku`)
+
+  ```bash
+  export CONVERSATION_MEMORY_API_MODEL="sonnet"
+  ```
+
+- **`CONVERSATION_MEMORY_API_BASE_URL`**: Custom Anthropic API endpoint
+
+  ```bash
+  export CONVERSATION_MEMORY_API_BASE_URL="https://api.anthropic.com"
+  ```
+
+- **`CONVERSATION_MEMORY_API_TOKEN`**: Authentication token for custom API endpoint
+
+  ```bash
+  export CONVERSATION_MEMORY_API_TOKEN="sk-ant-..."
+  ```
+
+- **`CONVERSATION_MEMORY_API_TIMEOUT_MS`**: API call timeout in milliseconds (default: SDK default)
+
+  ```bash
+  export CONVERSATION_MEMORY_API_TIMEOUT_MS="30000"
+  ```
+
+**Note**: If these variables are not set, the plugin uses Claude Code's default Anthropic API
+configuration (subscription-based or `ANTHROPIC_API_KEY`).
+
 ## Development
 
 ### Build
