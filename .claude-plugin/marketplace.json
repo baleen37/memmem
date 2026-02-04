@@ -32,20 +32,6 @@
       "version": "4.2.0"
     },
     {
-      "name": "databricks",
-      "description": "Databricks integration via MCP server - execute SQL, manage clusters, query Unity Catalog",
-      "source": "./plugins/databricks",
-      "category": "productivity",
-      "tags": [
-        "databricks",
-        "data",
-        "sql",
-        "mcp",
-        "analytics"
-      ],
-      "version": "4.2.0"
-    },
-    {
       "name": "git-guard",
       "description": "Git workflow protection hooks - prevents commit and PR bypasses, enforces pre-commit checks",
       "source": "./plugins/git-guard",
@@ -56,20 +42,6 @@
         "pre-commit",
         "pr",
         "security"
-      ],
-      "version": "4.2.0"
-    },
-    {
-      "name": "jira",
-      "description": "Jira integration via Atlassian MCP server - create, search, and manage issues",
-      "source": "./plugins/jira",
-      "category": "productivity",
-      "tags": [
-        "jira",
-        "project-management",
-        "issue-tracking",
-        "atlassian",
-        "mcp"
       ],
       "version": "4.2.0"
     },
