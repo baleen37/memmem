@@ -17,11 +17,32 @@ into the Claude Code plugin ecosystem.
 - **Date Filtering**: Search within specific time ranges
 - **Conversation Reading**: Full conversation retrieval with pagination
 
+## Agents
+
+### `search-conversation`
+
+Specialized agent for searching and synthesizing conversation history.
+Saves 50-100x context by returning synthesized insights instead of raw
+conversation data.
+
+**The agent automatically:**
+
+1. Searches using semantic + text search
+2. Reads top 2-5 relevant conversations
+3. Synthesizes findings into 200-1000 word summary
+4. Returns actionable insights with sources
+
+**Always use the agent instead of MCP tools directly** to avoid wasting context.
+
+See `agents/search-conversation.md` for implementation details.
+
 ## Skills
 
 ### `remembering-conversations`
 
 A skill that guides Claude to search conversation history before reinventing solutions or repeating mistakes.
+
+**Core principle:** Always dispatch the search-conversation agent. Never use MCP tools directly.
 
 **When to use:**
 
@@ -30,17 +51,27 @@ A skill that guides Claude to search conversation history before reinventing sol
 - User references past work ("last time", "we discussed", etc.)
 - Need to follow an unfamiliar workflow
 
-**Core principle:** Search before reinventing. Searching costs nothing; reinventing or repeating mistakes costs
-everything.
+**What it does:**
+
+- Forces agent delegation (YOU MUST dispatch search-conversation agent)
+- Prevents direct MCP tool usage (wastes context)
+- Saves 50-100x context vs. loading raw conversations
 
 See `skills/remembering-conversations/SKILL.md` for complete usage guide.
 
 ## MCP Tools
 
+**⚠️ Warning:** Direct MCP tool usage is discouraged. Always use the
+`search-conversation` agent instead to save 50-100x context.
+
+These tools are exposed for advanced usage only. See `skills/remembering-conversations/MCP-TOOLS.md` for complete API reference.
+
 ### `conversation-memory__search`
 
 Restores context by searching past conversations. Claude doesn't automatically remember past sessions—this tool
 recovers decisions, solutions, and avoids reinventing work.
+
+**Use the search-conversation agent instead of calling this directly.**
 
 **Parameters:**
 
@@ -72,6 +103,8 @@ recovers decisions, solutions, and avoids reinventing work.
 
 Reads full conversations to extract detailed context after finding relevant results with search. Essential for
 understanding complete rationale, evolution, and gotchas behind past decisions.
+
+**Use the search-conversation agent instead of calling this directly.**
 
 **Parameters:**
 
