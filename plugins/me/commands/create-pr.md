@@ -4,6 +4,4 @@ description: Handle complete git workflow (commit → push → PR) with smart de
 argument-hint: [--draft] [--automerge]
 ---
 
-Use the `create-pr` skill to handle the complete git workflow from commit to merge-ready PR.
-
-**IMMEDIATELY invoke:** `Skill` tool with `skill="create-pr"`
+@me:create-pr

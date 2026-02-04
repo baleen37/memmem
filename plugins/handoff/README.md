@@ -45,6 +45,16 @@ This analyzes your current session and creates a handoff file with:
 /pickup 550e8400-e29b-41d4-a716-446655440000
 ```
 
+**Automatic Context Restoration:**
+
+The `/pickup` command automatically loads and displays all referenced context:
+
+- **Plan files**: If `plan_path` is set in the handoff, the plan content is automatically loaded and displayed
+- **Tasks session**: If `tasks_session_id` is set, the current tasks list is displayed
+- **Source session**: The original session ID is shown (use conversation-memory plugin to search for it)
+
+This gives you complete context restoration without manual file hunting.
+
 ### Listing Handoffs
 
 ```bash
@@ -108,7 +118,38 @@ Handoff: Recent handoff found. Use /pickup to resume: [summary]
 
 # Next day - resume work
 /pickup
-# Output: Session restored with summary, next steps, and decisions
+# Output:
+# Loading handoff session: Implementing handoff plugin
+#
+# Handoff ID: 550e8400-e29b-41d4-a716-446655440000
+# Created: 2026-02-04 16:30:00 UTC
+# Project: claude-plugins (feat/create-handoff)
+#
+# Summary:
+# Implementing handoff plugin for session context transfer
+#
+# Next Steps:
+#   - [ ] Complete /pickup command implementation
+#   - [ ] Add tests
+#
+# ---
+#
+# ### Referenced Plan
+# ### Implementation Plan for Handoff Plugin
+# [Full plan content auto-loaded here]
+#
+# ---
+#
+# ### Tasks Session
+# Session: 75c272b1-b00d-4bbb-bfa5-87269f30ff47
+#
+# [pending] Complete /pickup command implementation
+# [in_progress] Add tests for all commands
+#
+# ---
+#
+# ### Source Session
+# Session ID: 00538c2c-c67e-4afe-a933-bb8ed6ed19c6
 ```
 
 ### Workflow 2: Team Handoff
@@ -121,6 +162,7 @@ Handoff: Recent handoff found. Use /pickup to resume: [summary]
 # Developer B picks up the work
 /handoff-list  # See available handoffs
 /pickup 550e8400-e29b-41d4-a716-446655440000  # Load specific handoff
+# Output: Full context restored with plan, tasks, and decisions
 ```
 
 ## Testing

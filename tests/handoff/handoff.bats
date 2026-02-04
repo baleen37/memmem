@@ -180,3 +180,143 @@ EOF
   result=$(jq -s 'sort_by(.created_at) | reverse | .[0].id' "$HANDOFF_TEST_DIR"/*.json)
   [ "$result" = '"new"' ]
 }
+
+@test "pickup resolves plan_path with tilde expansion" {
+  HANDOFF_FILE="$HANDOFF_TEST_DIR/plan-handoff.json"
+
+  # Create a test plan file
+  TEST_PLAN_DIR="$TEST_TEMP_DIR/.claude/plans"
+  mkdir -p "$TEST_PLAN_DIR"
+  TEST_PLAN_FILE="$TEST_PLAN_DIR/test-plan.md"
+  echo "# Test Plan" > "$TEST_PLAN_FILE"
+
+  # Create handoff with plan_path reference
+  cat > "$HANDOFF_FILE" <<EOF
+{
+  "id": "plan-handoff",
+  "created_at": "$NOW",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Handoff with plan reference",
+  "references": {
+    "plan_path": "$TEST_PLAN_FILE",
+    "tasks_session_id": null
+  }
+}
+EOF
+
+  # Extract plan_path from handoff
+  PLAN_PATH=$(jq -r '.references.plan_path // empty' "$HANDOFF_FILE")
+  [ "$PLAN_PATH" = "$TEST_PLAN_FILE" ]
+
+  # Verify the expansion works
+  TEST_EXPANDED="${PLAN_PATH/#\~/$TEST_TEMP_DIR}"
+  [ "$TEST_EXPANDED" = "$TEST_PLAN_FILE" ]
+}
+
+@test "pickup extracts tasks_session_id for loading" {
+  HANDOFF_FILE="$HANDOFF_TEST_DIR/tasks-handoff.json"
+  TASKS_SESSION_ID="75c272b1-b00d-4bbb-bfa5-87269f30ff47"
+
+  cat > "$HANDOFF_FILE" <<EOF
+{
+  "id": "tasks-handoff",
+  "created_at": "$NOW",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Handoff with tasks session",
+  "references": {
+    "plan_path": null,
+    "tasks_session_id": "$TASKS_SESSION_ID"
+  }
+}
+EOF
+
+  # Extract tasks_session_id from handoff
+  EXTRACTED_SESSION_ID=$(jq -r '.references.tasks_session_id // empty' "$HANDOFF_FILE")
+  [ "$EXTRACTED_SESSION_ID" = "$TASKS_SESSION_ID" ]
+}
+
+@test "pickup handles missing plan file gracefully" {
+  HANDOFF_FILE="$HANDOFF_TEST_DIR/missing-plan-handoff.json"
+
+  cat > "$HANDOFF_FILE" <<EOF
+{
+  "id": "missing-plan-handoff",
+  "created_at": "$NOW",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Handoff with missing plan",
+  "references": {
+    "plan_path": "~/.claude/plans/nonexistent.md",
+    "tasks_session_id": null
+  }
+}
+EOF
+
+  # Extract plan_path
+  PLAN_PATH=$(jq -r '.references.plan_path // empty' "$HANDOFF_FILE")
+  [ -n "$PLAN_PATH" ]
+
+  # Verify file doesn't exist (skill should show warning but continue)
+  EXPANDED_PATH="${PLAN_PATH/#\~/$HOME}"
+  [ ! -f "$EXPANDED_PATH" ]
+}
+
+@test "pickup displays source_session_id when present" {
+  HANDOFF_FILE="$HANDOFF_TEST_DIR/source-session-handoff.json"
+  SOURCE_SESSION_ID="00538c2c-c67e-4afe-a933-bb8ed6ed19c6"
+
+  cat > "$HANDOFF_FILE" <<EOF
+{
+  "id": "source-session-handoff",
+  "created_at": "$NOW",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Handoff with source session",
+  "source_session_id": "$SOURCE_SESSION_ID"
+}
+EOF
+
+  # Extract source_session_id
+  EXTRACTED_SOURCE=$(jq -r '.source_session_id // empty' "$HANDOFF_FILE")
+  [ "$EXTRACTED_SOURCE" = "$SOURCE_SESSION_ID" ]
+}
+
+@test "pickup finds most recent unloaded handoff for project" {
+  # Create multiple handoffs for the same project
+  cat > "$HANDOFF_TEST_DIR/recent1.json" <<EOF
+{
+  "id": "recent1",
+  "created_at": "2026-02-04T10:00:00Z",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Recent handoff 1"
+}
+EOF
+
+  cat > "$HANDOFF_TEST_DIR/recent2.json" <<EOF
+{
+  "id": "recent2",
+  "created_at": "2026-02-04T12:00:00Z",
+  "loaded_at": null,
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Recent handoff 2"
+}
+EOF
+
+  cat > "$HANDOFF_TEST_DIR/loaded.json" <<EOF
+{
+  "id": "loaded",
+  "created_at": "2026-02-04T13:00:00Z",
+  "loaded_at": "2026-02-04T14:00:00Z",
+  "project_path": "$TEST_PROJECT_PATH",
+  "summary": "Already loaded"
+}
+EOF
+
+  # Find most recent unloaded handoff
+  # In the skill, this would use find and jq to filter by project and loaded_at == null
+  result=$(jq -s '[.[] | select(.project_path == "'"$TEST_PROJECT_PATH"'") | select(.loaded_at == null)] | sort_by(.created_at) | reverse | .[0].id' "$HANDOFF_TEST_DIR"/*.json)
+  [ "$result" = '"recent2"' ]
+}

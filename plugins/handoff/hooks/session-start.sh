@@ -49,7 +49,7 @@ for file in "$HANDOFF_DIR"/*.json; do
 done
 
 if [ "$found_handoff" = true ]; then
-  echo "Handoff: Recent handoff found. Use /pickup to resume: $handoff_summary"
+  echo "Handoff: Recent handoff found. Use /pickup to resume: $handoff_summary" >&2
   exit 0
 fi
 
