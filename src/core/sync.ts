@@ -224,7 +224,7 @@ export async function syncConversations(
         }
 
         console.log(`  Summarizing ${path.basename(filePath)} (${exchanges.length} exchanges)...`);
-        const summary = await summarizeConversation(exchanges);
+        const summary = await summarizeConversation(exchanges, sessionId);
 
         const summaryPath = filePath.replace('.jsonl', '-summary.txt');
         fs.writeFileSync(summaryPath, summary, 'utf-8');
