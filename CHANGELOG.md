@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.2.2](https://github.com/baleen37/claude-plugins/compare/claude-plugins-v5.2.1...claude-plugins-v5.2.2) (2026-02-04)
+
+
+### Code Refactoring
+
+* **tests:** test code cleanup and performance improvements ([839d506](https://github.com/baleen37/claude-plugins/commit/839d5069eb6f592c2f8c938113fadc479ad59acb))
+
 ## [5.2.1](https://github.com/baleen37/claude-plugins/compare/claude-plugins-v5.2.0...claude-plugins-v5.2.1) (2026-02-04)
 
 
