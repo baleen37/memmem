@@ -4,8 +4,29 @@ import { initDatabase } from '../core/db.js';
 import { getDbPath, getArchiveDir } from '../core/paths.js';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 const command = process.argv[2];
+
+// Ensure dependencies are installed before running any command
+async function ensureDependencies() {
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || process.cwd();
+  const nodeModulesPath = path.join(pluginRoot, 'node_modules');
+
+  if (!fs.existsSync(nodeModulesPath)) {
+    console.error('[conversation-memory] Installing dependencies...');
+    try {
+      execSync('npm install --legacy-peer-deps --silent', {
+        cwd: pluginRoot,
+        stdio: 'inherit'
+      });
+      console.error('[conversation-memory] Dependencies installed.');
+    } catch (error) {
+      console.error('[conversation-memory] Failed to install dependencies:', error);
+      throw error;
+    }
+  }
+}
 
 // Parse --concurrency flag from remaining args
 function getConcurrency(): number {
@@ -27,6 +48,9 @@ const noSummaries = getNoSummaries();
 
 async function main() {
   try {
+    // Ensure dependencies are installed (모든 명령 실행 전)
+    await ensureDependencies();
+
     switch (command) {
       case 'index-session':
         const sessionId = process.argv[3];
