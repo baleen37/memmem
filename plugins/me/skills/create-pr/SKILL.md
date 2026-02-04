@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Use when user asks to create PR, commit and push, or mentions being ready to merge - handles conflicts, protected branches, and merge-ready verification
+description: This skill should be used when the user asks to "create PR", "commit and push", "push to remote", mentions being "ready to merge", or wants to submit changes for review. Handles complete git workflow with conflict detection, protected branch checks, and merge-ready verification.
 ---
 
 # Create PR
@@ -9,12 +9,14 @@ Complete git workflow: commit → push → PR → verify merge-ready.
 
 **Core principle:** Verify before every transition. Smart defaults, no unnecessary options.
 
-**Announce at start:** "I'm using the create-pr skill to handle the complete git workflow."
+**Announce at start:** "Using the create-pr skill to handle the complete git workflow."
 
 ## Red Flags - STOP
 
 Stop if you:
-- Don't know which base branch to use
+- **On main/master branch** - MUST create feature branch first, NO EXCEPTIONS
+- **No changes to commit** - Inform user working tree is clean
+- **Don't know which base branch to use** - Detect via `gh repo view`
 - Skipped conflict check before push
 - Said "push will catch conflicts" or "push will detect it"
 - Used `git add` without first running `git status`
@@ -42,216 +44,26 @@ Stop if you:
 | PR status | `gh pr view --json mergeable,mergeStateStatus` | CLEAN/BEHIND/DIRTY |
 | Update branch | `git merge origin/<base> --no-edit && git push` | When BEHIND |
 
-## Workflow Steps
+## Workflow
 
-### Phase 1: Pre-flight Checks
+For detailed step-by-step workflow with all phases (Pre-flight Checks, Commit, Pre-push Verification, Push, Create PR, Verify Merge-Ready), see **`references/workflow.md`**.
 
-**1.1 Verify Current State**
-
-```bash
-# Run in parallel
-git status &
-git log --oneline -5 &
-git branch --show-current &
-wait
-```
-
-**1.2 Main Branch Protection**
-
-```bash
-CURRENT_BRANCH=$(git branch --show-current)
-
-if [[ "$CURRENT_BRANCH" == "main" ]] || [[ "$CURRENT_BRANCH" == "master" ]]; then
-  ERROR: Cannot create PR from protected branch '$CURRENT_BRANCH'
-
-  SOLUTION:
-  1. Create feature branch: git checkout -b feature/your-feature
-  2. Or create WIP branch: git checkout -b wip/$(date +%Y%m%d)
-
-  exit 1
-fi
-```
-
-**Never proceed from main/master.** This protects against accidental direct commits.
-
-### Phase 2: Commit Changes
-
-**2.1 Review Changes**
-
-```bash
-git status
-git diff --stat
-```
-
-**2.2 Stage Files**
-
-```bash
-# NEVER use: git add -A or git add .
-# ALWAYS stage specific files:
-git add path/to/file1 path/to/file2
-```
-
-**2.3 Create Commit**
-
-```bash
-# Use conventional commits format
-git commit -m "$(cat <<'EOF'
-type(scope): description
-
-Optional body explaining why this change was made.
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
-EOF
-)"
-```
-
-### Phase 3: Pre-push Verification
-
-**3.1 Detect Base Branch**
-
-Priority order:
-
-```bash
-# 1. Try default branch (primary method)
-BASE=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null)
-
-# 2. Try recent PR base (fallback)
-if [[ -z "$BASE" ]]; then
-  BASE=$(gh pr list --limit 1 --json baseRefName -q '.[0].baseRefName' 2>/dev/null)
-fi
-
-# 3. Ask user (last resort)
-if [[ -z "$BASE" ]]; then
-  echo "ERROR: Cannot determine base branch"
-  echo "Please specify base branch manually"
-  exit 1
-fi
-```
-
-**Never assume base branch name.** User saying "main like always" doesn't override verification.
-
-**3.2 Check for Conflicts**
-
-**REQUIRED.** Takes 5 seconds. Prevents hours of debugging broken remote.
-
-```bash
-# Fetch latest base
-git fetch origin "$BASE"
-
-# Check for merge conflicts
-git merge-tree $(git merge-base HEAD origin/"$BASE") HEAD origin/"$BASE"
-
-if [[ $? -ne 0 ]]; then
-  # Conflicts detected
-  echo "WARNING: Conflicts detected with origin/$BASE"
-
-  # Auto-resolve whitespace-only conflicts
-  if git diff origin/"$BASE"...HEAD | grep -q "^[-+]\s*$"; then
-    echo "Auto-resolving: whitespace only"
-    # Proceed
-  else
-    echo "ERROR: Logic conflicts require manual resolution"
-    echo "Run: git merge origin/$BASE"
-    exit 1
-  fi
-fi
-```
-
-### Phase 4: Push
-
-```bash
-git push -u origin HEAD
-
-# Verify push succeeded
-if [[ $? -ne 0 ]]; then
-  echo "ERROR: Push failed"
-
-  # Common causes
-  if ! git remote get-url origin >/dev/null 2>&1; then
-    echo "No remote 'origin' configured"
-    echo "Add with: git remote add origin <url>"
-  fi
-
-  exit 1
-fi
-```
-
-### Phase 5: Create PR
-
-**5.1 Generate PR Body**
-
-```bash
-# Extract commits since branching from base
-COMMITS=$(git log --oneline origin/"$BASE"..HEAD)
-
-# Generate summary from commits
-cat > /tmp/pr-body.md <<EOF
-## Summary
-$(echo "$COMMITS" | sed 's/^[a-f0-9]* /- /')
-
-## Test plan
-- [ ] Tests pass
-- [ ] Manual verification done
-EOF
-```
-
-**5.2 Create PR**
-
-```bash
-gh pr create \
-  --base "$BASE" \
-  --title "$(git log -1 --pretty=%s)" \
-  --body "$(cat /tmp/pr-body.md)"
-```
-
-**Always specify `--base` explicitly.**
-
-### Phase 6: Verify Merge-Ready
-
-**6.1 Check PR Status**
-
-```bash
-PR_STATUS=$(gh pr view --json mergeable,mergeStateStatus)
-
-MERGEABLE=$(echo "$PR_STATUS" | jq -r .mergeable)
-STATE=$(echo "$PR_STATUS" | jq -r .mergeStateStatus)
-```
-
-**6.2 Handle Status**
-
-```bash
-case "$STATE" in
-  CLEAN)
-    echo "✓ PR is merge-ready"
-    ;;
-
-  BEHIND)
-    echo "Branch is behind $BASE, updating..."
-    git merge origin/"$BASE" --no-edit
-    git push
-
-    # Re-check status
-    # (repeat 6.1)
-    ;;
-
-  DIRTY)
-    echo "ERROR: Conflicts detected after PR creation"
-    echo "Resolve manually and re-push"
-    exit 1
-    ;;
-
-  *)
-    echo "WARNING: Unknown status '$STATE'"
-    ;;
-esac
-```
+Quick workflow overview:
+1. **Pre-flight**: Check status, verify changes, protect main/master
+2. **Commit**: Stage specific files, create conventional commit
+3. **Pre-push**: Detect base branch, check for conflicts
+4. **Push**: Push to remote with verification
+5. **Create PR**: Generate body/title, create with explicit `--base`
+6. **Verify**: Check PR status, handle BEHIND/DIRTY/CLEAN
 
 ## Error Handling
 
 | Error | Cause | Solution |
 |-------|-------|----------|
+| "No changes to commit" | Working tree is clean | Wait for user direction - don't proceed |
 | "Cannot create PR from main" | On protected branch | `git checkout -b feature/name` |
 | "Cannot determine base branch" | No default branch detected | Specify with `gh repo view` |
+| "Pre-commit hook failed" | Linting errors | Auto-fix then retry commit |
 | "Push failed: no remote" | Missing origin | `git remote add origin <url>` |
 | "Conflicts detected" | Changes conflict with base | `git merge origin/<base>` then resolve |
 | "PR status: BEHIND" | Base branch updated | Auto-merged and re-pushed |
@@ -263,12 +75,14 @@ esac
 
 | Mistake | Why Bad | Fix |
 |---------|---------|-----|
+| Proceeding with no changes | Wastes user time | Check git status first, inform user |
 | Omit `--base` flag | PR goes to wrong branch | Always specify explicitly |
 | `git add -A` blindly | Adds unintended files | Run `git status` first |
 | Skip conflict check | Breaks remote build | Always check before push |
 | Assume base = main | Repos use different names | Verify via `gh repo view` |
 | Stop after PR creation | May not be merge-ready | Check status, handle BEHIND |
 | Proceed from main | Violates workflow | Block with error |
+| Ignore pre-commit failures | Blocks workflow unnecessarily | Auto-fix then retry |
 
 ## Rationalizations to Reject
 
@@ -292,6 +106,13 @@ esac
 **Pairs with:**
 - **verification-before-completion** - REQUIRED before starting this workflow
 - **finishing-a-development-branch** - REQUIRED for cleanup after PR merged
+
+## Additional Resources
+
+### Reference Files
+
+For detailed step-by-step workflow, consult:
+- **`references/workflow.md`** - Complete workflow with all 6 phases
 
 ## Notes
 
