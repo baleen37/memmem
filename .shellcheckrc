@@ -1,3 +1,0 @@
-# Disable specific warnings
-disable=SC2086  # We quote variables in most cases
-disable=SC2164  # Use cd || true in scripts

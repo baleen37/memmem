@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(me:create-pr)",
-      "Skill(create-pr)",
-      "WebFetch(domain:github.com)"
-    ]
-  }
-}
