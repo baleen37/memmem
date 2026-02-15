@@ -11,8 +11,7 @@ import {
   ObservationResultV3,
   insertObservationV3,
   getObservationV3,
-  searchObservationsV3,
-  deleteObservationV3
+  searchObservationsV3
 } from './db.v3.js';
 import { generateEmbedding, initEmbeddings } from './embeddings.js';
 
@@ -26,14 +25,6 @@ export interface Observation {
   project: string;
   sessionId: string | null;
   timestamp: number;
-}
-
-/**
- * Observation with similarity score from vector search
- * Internal type used for vector search results
- */
-interface ObservationWithSimilarity extends Observation {
-  similarity: number;
 }
 
 /**
@@ -163,83 +154,4 @@ export async function findByProject(
     sessionId: r.sessionId,
     timestamp: r.timestamp
   }));
-}
-
-/**
- * Search observations by vector similarity.
- *
- * Uses sqlite-vec for efficient vector similarity search.
- * Returns observations ordered by similarity (highest first).
- *
- * @param db - Database instance
- * @param queryEmbedding - Query embedding vector (768 dimensions)
- * @param limit - Maximum number of results
- * @param project - Optional project filter
- * @returns Array of observations with similarity scores
- */
-export async function searchByVector(
-  db: Database.Database,
-  queryEmbedding: number[],
-  limit: number = 10,
-  project?: string
-): Promise<ObservationWithSimilarity[]> {
-  // Use sqlite-vec's KNN query syntax with vec0 virtual table
-  // Format: WHERE embedding MATCH ? AND k = ?
-  const queryBuffer = Buffer.from(new Float32Array(queryEmbedding).buffer);
-
-  let sql = `
-    SELECT
-      o.id,
-      o.title,
-      o.content,
-      o.project,
-      o.session_id as sessionId,
-      o.timestamp,
-      v.distance
-    FROM observations o
-    INNER JOIN vec_observations v ON CAST(o.id AS TEXT) = v.id
-    WHERE v.embedding MATCH ? AND v.k = ?
-  `;
-
-  const params: any[] = [queryBuffer, limit];
-
-  if (project) {
-    sql += ' AND o.project = ?';
-    params.push(project);
-  }
-
-  sql += ' ORDER BY v.distance ASC';
-
-  const stmt = db.prepare(sql);
-  const results = stmt.all(...params) as any[];
-
-  // Convert distance to similarity (1 - distance for cosine distance)
-  return results.map(row => ({
-    id: row.id,
-    title: row.title,
-    content: row.content,
-    project: row.project,
-    sessionId: row.sessionId,
-    timestamp: row.timestamp,
-    similarity: Math.max(0, 1 - row.distance)
-  }));
-}
-
-/**
- * Delete an observation by ID.
- *
- * Deletes from both tables:
- * - observations (main table)
- * - vec_observations (vector embeddings)
- *
- * Note: Named 'deleteObservation' instead of 'delete' because delete is a reserved word.
- *
- * @param db - Database instance
- * @param id - Observation ID
- */
-export async function deleteObservation(
-  db: Database.Database,
-  id: number
-): Promise<void> {
-  deleteObservationV3(db, id);
 }

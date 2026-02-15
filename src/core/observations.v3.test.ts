@@ -5,9 +5,7 @@ import {
   create,
   findById,
   findByIds,
-  findByProject,
-  searchByVector,
-  deleteObservation
+  findByProject
 } from './observations.v3.js';
 
 // Mock embedding generation - create a valid 768-dimensional vector
@@ -193,112 +191,6 @@ describe('observations.v3', () => {
       expect(observations[0].title).toBe('New');
       expect(observations[1].title).toBe('Middle');
       expect(observations[2].title).toBe('Old');
-    });
-  });
-
-  describe('searchByVector', () => {
-    it('should perform vector similarity search', async () => {
-      // Create observations with similar content
-      await create(db, 'TypeScript Best Practices', 'Content about TypeScript patterns', 'test-project');
-      await create(db, 'JavaScript Tips', 'Content about JavaScript tricks', 'test-project');
-      await create(db, 'Python Tutorial', 'Content about Python basics', 'test-project');
-
-      // Search for TypeScript-related content
-      const results = await searchByVector(
-        db,
-        createMockEmbedding(),
-        2,
-        'test-project'
-      );
-
-      expect(results.length).toBeGreaterThan(0);
-      expect(results.length).toBeLessThanOrEqual(2);
-      // All results should have id, title, content, and similarity
-      results.forEach(result => {
-        expect(result.id).toBeDefined();
-        expect(result.title).toBeDefined();
-        expect(result.content).toBeDefined();
-        expect(result.similarity).toBeGreaterThanOrEqual(0);
-        expect(result.similarity).toBeLessThanOrEqual(1);
-      });
-    });
-
-    it('should filter by project when specified', async () => {
-      await create(db, 'Test 1', 'Content 1', 'project-a');
-      await create(db, 'Test 2', 'Content 2', 'project-b');
-
-      const results = await searchByVector(
-        db,
-        createMockEmbedding(),
-        10,
-        'project-a'
-      );
-
-      expect(results.length).toBeGreaterThan(0);
-      results.forEach(result => {
-        expect(result.project).toBe('project-a');
-      });
-    });
-
-    it('should return results from all projects when project not specified', async () => {
-      await create(db, 'Test 1', 'Content 1', 'project-a');
-      await create(db, 'Test 2', 'Content 2', 'project-b');
-
-      const results = await searchByVector(
-        db,
-        createMockEmbedding(),
-        10
-      );
-
-      expect(results.length).toBeGreaterThan(0);
-    });
-
-    it('should return empty array when no observations exist', async () => {
-      const results = await searchByVector(
-        db,
-        createMockEmbedding(),
-        10
-      );
-
-      expect(results).toHaveLength(0);
-    });
-
-    it('should order by similarity DESC', async () => {
-      await create(db, 'Similar 1', 'Similar content here', 'test-project');
-      await create(db, 'Similar 2', 'Similar content there', 'test-project');
-      await create(db, 'Different', 'Different content', 'test-project');
-
-      const results = await searchByVector(
-        db,
-        createMockEmbedding(),
-        10
-      );
-
-      // Results should be ordered by similarity (descending)
-      for (let i = 1; i < results.length; i++) {
-        expect(results[i - 1].similarity).toBeGreaterThanOrEqual(results[i].similarity);
-      }
-    });
-  });
-
-  describe('deleteObservation', () => {
-    it('should delete observation by id', async () => {
-      const id = await create(db, 'Delete Me', 'Delete my content', 'test-project');
-
-      await deleteObservation(db, id);
-
-      // Check main table
-      const obs = db.prepare('SELECT * FROM observations WHERE id = ?').get(id);
-      expect(obs).toBeUndefined();
-
-      // Check vector table
-      const vec = db.prepare('SELECT * FROM vec_observations WHERE id = ?').get(String(id));
-      expect(vec).toBeUndefined();
-    });
-
-    it('should handle deleting non-existent id', async () => {
-      // Should not throw
-      await expect(deleteObservation(db, 99999)).resolves.not.toThrow();
     });
   });
 });
