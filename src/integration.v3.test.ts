@@ -10,7 +10,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3, getPendingEventsV3, getObservationV3, getObservationCountV3 } from './core/db.v3.js';
+import { initDatabaseV3, getAllPendingEventsV3, getObservationV3 } from './core/db.v3.js';
 import { handlePostToolUse } from './hooks/post-tool-use.js';
 import { handleStop, type StopHookOptions } from './hooks/stop.js';
 import { handleSessionStart, type SessionStartConfig } from './hooks/session-start.js';
@@ -72,7 +72,7 @@ describe('V3 Integration Tests', () => {
       handlePostToolUse(db, sessionId, project, 'Bash', { command: 'npm run lint', exitCode: 1, stderr: 'Error: Unused variable' });
 
       // Step 2: Verify pending_events were stored
-      const pendingEvents = getPendingEventsV3(db, sessionId, 100);
+      const pendingEvents = getAllPendingEventsV3(db, sessionId);
       expect(pendingEvents).toHaveLength(6);
       expect(pendingEvents[0].toolName).toBe('Read');
       expect(pendingEvents[0].project).toBe(project);
@@ -200,7 +200,7 @@ describe('V3 Integration Tests', () => {
       handlePostToolUse(db, sessionId, project, 'LSP', { operation: 'goToDefinition' }); // Should be filtered
 
       // Only Read and Bash should be in pending_events
-      const pendingEvents = getPendingEventsV3(db, sessionId, 100);
+      const pendingEvents = getAllPendingEventsV3(db, sessionId);
       expect(pendingEvents).toHaveLength(2);
       expect(pendingEvents[0].toolName).toBe('Read');
       expect(pendingEvents[1].toolName).toBe('Bash');
@@ -563,7 +563,7 @@ describe('V3 Integration Tests', () => {
       });
 
       // Verify observations from Day 1
-      const obsCountAfterDay1 = getObservationCountV3(db, project);
+      const obsCountAfterDay1 = (db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get(project) as { count: number }).count;
       expect(obsCountAfterDay1).toBe(2);
 
       // Day 2: Start new session (should inject previous observations)
@@ -605,7 +605,7 @@ describe('V3 Integration Tests', () => {
       });
 
       // Verify all observations
-      const obsCountAfterDay2 = getObservationCountV3(db, project);
+      const obsCountAfterDay2 = (db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get(project) as { count: number }).count;
       expect(obsCountAfterDay2).toBe(3);
 
       // Search should find all related observations
@@ -649,8 +649,8 @@ describe('V3 Integration Tests', () => {
       });
 
       // Verify isolation
-      expect(getObservationCountV3(db, 'project-a')).toBe(1);
-      expect(getObservationCountV3(db, 'project-b')).toBe(1);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('project-a') as { count: number }).count).toBe(1);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('project-b') as { count: number }).count).toBe(1);
 
       // Search should respect project filter
       const resultsA = await searchV3('fix', {
@@ -690,7 +690,7 @@ describe('V3 Integration Tests', () => {
       })).resolves.toBeUndefined();
 
       // No observations should be created
-      expect(getObservationCountV3(db, 'test-project')).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('test-project') as { count: number }).count).toBe(0);
     });
 
     test('handles empty LLM response', async () => {
@@ -711,7 +711,7 @@ describe('V3 Integration Tests', () => {
 
       // LLM should be called but no observations created
       expect(mockProvider.complete).toHaveBeenCalledTimes(1);
-      expect(getObservationCountV3(db, 'test-project')).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('test-project') as { count: number }).count).toBe(0);
     });
 
     test('handles malformed LLM response', async () => {
@@ -732,7 +732,7 @@ describe('V3 Integration Tests', () => {
       })).resolves.toBeUndefined();
 
       // No observations should be created
-      expect(getObservationCountV3(db, 'test-project')).toBe(0);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('test-project') as { count: number }).count).toBe(0);
     });
 
     test('handles concurrent sessions', async () => {
@@ -759,7 +759,7 @@ describe('V3 Integration Tests', () => {
       ]);
 
       // Both observations should be created
-      expect(getObservationCountV3(db, 'test-project')).toBe(2);
+      expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('test-project') as { count: number }).count).toBe(2);
 
       const obs1 = getObservationV3(db, 1);
       const obs2 = getObservationV3(db, 2);

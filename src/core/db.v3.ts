@@ -250,48 +250,6 @@ export function getAllPendingEventsV3(
 }
 
 /**
- * Get pending events for a session
- */
-export function getPendingEventsV3(
-  db: Database.Database,
-  sessionId: string,
-  limit: number = 10
-): Array<PendingEventV3 & { id: number }> {
-  const stmt = db.prepare(`
-    SELECT id, session_id as sessionId, project, tool_name as toolName, compressed, timestamp, created_at as createdAt
-    FROM pending_events
-    WHERE session_id = ?
-    ORDER BY created_at ASC
-    LIMIT ?
-  `);
-
-  return stmt.all(sessionId, limit) as Array<PendingEventV3 & { id: number }>;
-}
-
-/**
- * Delete old pending events
- * If sessionId is provided, only deletes events for that session
- */
-export function deleteOldPendingEventsV3(
-  db: Database.Database,
-  beforeTimestamp: number,
-  sessionId?: string
-): number {
-  let sql = 'DELETE FROM pending_events WHERE created_at < ?';
-  const params: any[] = [beforeTimestamp];
-
-  if (sessionId) {
-    sql += ' AND session_id = ?';
-    params.push(sessionId);
-  }
-
-  const stmt = db.prepare(sql);
-  const result = stmt.run(...params);
-
-  return result.changes;
-}
-
-/**
  * Search observations with filters
  */
 export function searchObservationsV3(
@@ -370,46 +328,4 @@ export function deleteObservationV3(
   const result = stmt.run(id);
 
   return result.changes > 0;
-}
-
-/**
- * Get count of observations by project
- */
-export function getObservationCountV3(
-  db: Database.Database,
-  project?: string
-): number {
-  let sql = 'SELECT COUNT(*) as count FROM observations';
-  const params: any[] = [];
-
-  if (project) {
-    sql += ' WHERE project = ?';
-    params.push(project);
-  }
-
-  const stmt = db.prepare(sql);
-  const result = stmt.get(...params) as { count: number };
-
-  return result.count;
-}
-
-/**
- * Get count of pending events by session
- */
-export function getPendingEventCountV3(
-  db: Database.Database,
-  sessionId?: string
-): number {
-  let sql = 'SELECT COUNT(*) as count FROM pending_events';
-  const params: any[] = [];
-
-  if (sessionId) {
-    sql += ' WHERE session_id = ?';
-    params.push(sessionId);
-  }
-
-  const stmt = db.prepare(sql);
-  const result = stmt.get(...params) as { count: number };
-
-  return result.count;
 }
