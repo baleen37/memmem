@@ -1,27 +1,27 @@
 ---
 name: configure
-description: This skill provides configuration guidance for the conversation-memory plugin. Invoke explicitly when user requests to configure plugin settings.
+description: This skill provides configuration guidance for the memmem plugin. Invoke explicitly when user requests to configure plugin settings.
 version: 1.0.0
 ---
 
 # Configure Conversation Memory
 
-This skill provides guidance for configuring the conversation-memory plugin,
+This skill provides guidance for configuring the memmem plugin,
 including LLM settings for summarization, API key configuration, project
 exclusions, and environment variables.
 
 ## Config File Location
 
-The conversation-memory plugin uses a configuration file at:
+The memmem plugin uses a configuration file at:
 
 ```text
-~/.config/conversation-memory/config.json
+~/.config/memmem/config.json
 ```
 
 Create this directory and file if it doesn't exist:
 
 ```bash
-mkdir -p ~/.config/conversation-memory
+mkdir -p ~/.config/memmem
 ```
 
 ## LLM Provider Configuration
@@ -86,7 +86,7 @@ export CONVERSATION_SEARCH_EXCLUDE_PROJECTS="project-a,project-b,project-c"
 
 ### Method 2: Exclude Config File
 
-Create a file at `~/.config/conversation-memory/conversation-index/exclude.txt`:
+Create a file at `~/.config/memmem/conversation-index/exclude.txt`:
 
 ```text
 # Comments start with #
@@ -112,16 +112,16 @@ Test your configuration:
 
 ```bash
 # Sync conversations with summarization
-conversation-memory sync
+memmem sync
 
 # Enable debug logging
-CONVERSATION_MEMORY_DEBUG=true conversation-memory sync
+CONVERSATION_MEMORY_DEBUG=true memmem sync
 
 # Verify index health
-conversation-memory verify
+memmem verify
 
 # Check logs
-tail -f ~/.config/conversation-memory/logs/$(date +%Y-%m-%d).log
+tail -f ~/.config/memmem/logs/$(date +%Y-%m-%d).log
 ```
 
 ## Troubleshooting
@@ -163,7 +163,7 @@ appears
 
 **Solution:**
 
-- Verify config.json exists at `~/.config/conversation-memory/config.json`
+- Verify config.json exists at `~/.config/memmem/config.json`
 - Check config.json has valid JSON syntax
 - Ensure `provider` and `apiKey` fields are present
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Observe CLI - Handle PostToolUse and Stop hooks for conversation-memory.
+ * Observe CLI - Handle PostToolUse and Stop hooks for memmem.
  *
  * This script is called by the hooks system and:
  * - For PostToolUse: Compresses and stores tool events in pending_events
@@ -87,7 +87,7 @@ async function handleSummarize(): Promise<void> {
     const config = loadConfig();
 
     if (!config) {
-      console.error('[conversation-memory] No LLM config found, skipping observation extraction');
+      console.error('[memmem] No LLM config found, skipping observation extraction');
       return;
     }
 
@@ -126,7 +126,7 @@ async function main() {
     }
   } catch (error) {
     // Silent failure for async hooks to avoid disrupting session
-    console.error(`[conversation-memory] Error in observe: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[memmem] Error in observe: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(0);
   }
 }

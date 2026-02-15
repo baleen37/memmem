@@ -112,7 +112,7 @@ function createDatabase(wipe: boolean): Database.Database {
     if (!hasV3Tables && tableNames.has('exchanges')) {
       throw new Error(
         'Database schema mismatch: v2 database detected. ' +
-        'Please remove the old database (~/.config/conversation-memory/conversation-index/conversations.db) ' +
+        'Please remove the old database (~/.config/memmem/conversation-index/conversations.db) ' +
         'and restart. V3 will create a fresh schema. ' +
         'Note: v2 data cannot be migrated to v3.'
       );

@@ -180,7 +180,7 @@ export function handleRead(params: ReadInput): string {
 
 const server = new Server(
   {
-    name: 'conversation-memory',
+    name: 'memmem',
     version: '3.0.0',
   },
   {

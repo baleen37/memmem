@@ -40,7 +40,7 @@ function getDbPath() {
   if (process.env.CONVERSATION_MEMORY_DB_PATH) {
     return process.env.CONVERSATION_MEMORY_DB_PATH;
   }
-  return path.join(os.homedir(), '.config', 'conversation-memory', 'conversation-index', 'conversations.db');
+  return path.join(os.homedir(), '.config', 'memmem', 'conversation-index', 'conversations.db');
 }
 
 function getBackupPath() {
@@ -147,14 +147,14 @@ function displayMigrationInstructions(dbPath, backupPath, stats) {
   log(`     rm "${dbPath}"\n`, colors.cyan);
 
   log('  3. Rebuild and restart:');
-  log('     cd plugins/conversation-memory', colors.cyan);
+  log('     cd plugins/memmem', colors.cyan);
   log('     npm run build', colors.cyan);
   log('     # Restart Claude Code\n');
 
   log('  4. V3 will create a fresh database automatically on next session start.\n');
 
   log('Data Preservation Notes:', colors.yellow);
-  log('  - v2 conversation archives in ~/.config/conversation-memory/conversation-archive/');
+  log('  - v2 conversation archives in ~/.config/memmem/conversation-archive/');
   log('    are NOT affected and remain available for manual reference.');
   log('  - v3 will index new conversations going forward.');
   log('  - Historical data from v2 cannot be automatically converted to v3 format.\n');

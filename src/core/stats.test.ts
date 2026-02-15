@@ -4,7 +4,7 @@
  * NOTE: These tests require vitest/Node.js because getIndexStats uses better-sqlite3
  * which is a native module not supported by Bun. To run these tests:
  *
- *   npx vitest run plugins/conversation-memory/src/core/stats.test.ts
+ *   npx vitest run plugins/memmem/src/core/stats.test.ts
  *
  * The formatStats tests can run with Bun since they don't require a database.
  */

@@ -1,6 +1,6 @@
-# Conversation Memory Plugin
+# Memmem
 
-Conversation memory plugin with **observation-based semantic search** across Claude Code sessions.
+Memmem - Conversation memory with **observation-based semantic search** across Claude Code sessions.
 
 ## Purpose
 
@@ -75,7 +75,7 @@ See `skills/remembering-conversations/SKILL.md` for complete usage guide.
 
 These tools are exposed for advanced usage only. See `skills/remembering-conversations/MCP-TOOLS.md` for complete API reference.
 
-### `conversation-memory__search`
+### `memmem__search`
 
 Restores context by searching past conversations using **observations** (structured insights).
 Uses progressive disclosure to minimize context usage.
@@ -119,7 +119,7 @@ Uses progressive disclosure to minimize context usage.
 { query: "authentication", projects: ["my-project"] }
 ```
 
-### `conversation-memory__get_observations`
+### `memmem__get_observations`
 
 Gets full observation details (Layer 2 of progressive disclosure). Use after search() to retrieve
 complete information including narrative, facts, concepts, and files.
@@ -137,7 +137,7 @@ complete information including narrative, facts, concepts, and files.
 { ids: ["obs-abc123", "obs-def456", "obs-ghi789"] }
 ```
 
-### `conversation-memory__read`
+### `memmem__read`
 
 Reads full conversations (Layer 3 of progressive disclosure). Use to extract detailed context after finding
 relevant observations with search() and getting full details with get_observations(). Essential for understanding
@@ -158,7 +158,7 @@ absolutely necessary to save context.
 
 ```bash
 # Install dependencies
-cd plugins/conversation-memory
+cd plugins/memmem
 npm install
 
 # Build the plugin
@@ -167,7 +167,7 @@ npm run build
 
 The plugin automatically:
 
-1. Creates `~/.config/conversation-memory/` directory
+1. Creates `~/.config/memmem/` directory
 2. Begins indexing conversations via SessionEnd hook
 3. Provides MCP tools for semantic search
 
@@ -185,13 +185,13 @@ This:
 
 1. Scans `~/.claude/sessions/` for new/modified conversations
 2. Generates embeddings using Transformers.js
-3. Stores in SQLite database (`~/.config/conversation-memory/conversations.db`)
+3. Stores in SQLite database (`~/.config/memmem/conversations.db`)
 4. Runs in background (non-blocking, silent on errors)
 
 ### Storage Structure
 
 ```text
-~/.config/conversation-memory/
+~/.config/memmem/
 ├── conversations.db          # SQLite database with embeddings
 └── config.json              # User settings (optional)
 ```
@@ -202,10 +202,10 @@ There are two ways to exclude conversations from indexing:
 
 **1. Directory-level exclusion:**
 
-Create a `.no-conversation-memory` marker file in the conversation directory:
+Create a `.no-memmem` marker file in the conversation directory:
 
 ```bash
-touch /path/to/conversation/dir/.no-conversation-memory
+touch /path/to/conversation/dir/.no-memmem
 ```
 
 **2. Inline content exclusion:**
@@ -221,7 +221,7 @@ The entire conversation will be excluded from indexing when any of these markers
 
 ### LLM Configuration (Required for Summarization)
 
-Summarization requires an LLM provider configuration. Create a config file at `~/.config/conversation-memory/config.json`:
+Summarization requires an LLM provider configuration. Create a config file at `~/.config/memmem/config.json`:
 
 **Supported providers:** `gemini`, `zai`
 
@@ -285,31 +285,31 @@ The plugin provides a CLI interface for manual operations:
 
 ```bash
 # Show help
-conversation-memory --help
+memmem --help
 
 # Sync new conversations
-conversation-memory sync
+memmem sync
 
 # Sync with parallel summarization
-conversation-memory sync --concurrency 4
+memmem sync --concurrency 4
 
 # Index a specific session
-conversation-memory index-session 2025-02-06-123456
+memmem index-session 2025-02-06-123456
 
 # Verify index health
-conversation-memory verify
+memmem verify
 
 # Repair detected issues
-conversation-memory repair
+memmem repair
 
 # Rebuild entire index
-conversation-memory rebuild --concurrency 8
+memmem rebuild --concurrency 8
 ```
 
 ### Project Structure
 
 ```text
-plugins/conversation-memory/
+plugins/memmem/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin metadata
 ├── .mcp.json                     # MCP server registration
@@ -365,14 +365,14 @@ The database must be recreated as vector dimensions are incompatible.
 
 ```bash
 # 1. Backup existing database (optional)
-cp ~/.config/conversation-memory/conversations.db \
-   ~/.config/conversation-memory/conversations.db.backup
+cp ~/.config/memmem/conversations.db \
+   ~/.config/memmem/conversations.db.backup
 
 # 2. Remove old database
-rm ~/.config/conversation-memory/conversations.db
+rm ~/.config/memmem/conversations.db
 
 # 3. Reinstall plugin dependencies
-cd plugins/conversation-memory
+cd plugins/memmem
 npm install
 
 # 4. Rebuild plugin
@@ -431,7 +431,7 @@ Then restart Claude Code.
 3. Try installing manually:
 
    ```bash
-   cd plugins/conversation-memory
+   cd plugins/memmem
    npm install
    ```
 
@@ -451,7 +451,7 @@ Then restart Claude Code.
 3. Remove old node_modules:
 
    ```bash
-   cd plugins/conversation-memory
+   cd plugins/memmem
    rm -rf node_modules
    npm install
    ```
@@ -461,7 +461,7 @@ Then restart Claude Code.
 If automatic installation fails repeatedly, install dependencies manually:
 
 ```bash
-cd plugins/conversation-memory
+cd plugins/memmem
 npm install
 npm run build
 ```
@@ -470,8 +470,8 @@ npm run build
 
 - **Standalone Plugin**: Complete implementation (not a wrapper)
 - **Based on @obra/episodic-memory**: Forked and integrated into Claude Code plugin ecosystem
-- **Storage Location**: `~/.config/conversation-memory/` (not `.claude/`)
-- **Naming**: All public interfaces use `conversation-memory` for clarity
+- **Storage Location**: `~/.config/memmem/` (not `.claude/`)
+- **Naming**: All public interfaces use `memmem` for clarity
 - **Embedding Model**: Google EmbeddingGemma-300M (ONNX, Q4 quantized)
   - 768 dimensions (Matryoshka-enabled: 128-768)
   - 100+ languages including Korean (MRR@10: 83.86 on XTREME-UP)
@@ -482,7 +482,7 @@ npm run build
 
 ## Future Enhancements
 
-- Slash commands: `/conversation-memory search`, `/conversation-memory stats`
+- Slash commands: `/memmem search`, `/memmem stats`
 - Conversation tagging/categorization
 - Export/import functionality
 - Web UI for browsing history

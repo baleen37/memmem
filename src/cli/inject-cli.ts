@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Inject CLI - Handle SessionStart hook for conversation-memory.
+ * Inject CLI - Handle SessionStart hook for memmem.
  *
  * This script is called by the hooks system and:
  * 1. Reads session data from stdin (JSON)
@@ -94,12 +94,12 @@ async function main() {
       }
 
       // Debug info to stderr (optional, can be removed)
-      // console.error(`[conversation-memory] Injected ${result.includedCount} observations (${result.tokenCount} tokens)`);
+      // console.error(`[memmem] Injected ${result.includedCount} observations (${result.tokenCount} tokens)`);
     } finally {
       db.close();
     }
   } catch (error) {
-    console.error(`[conversation-memory] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[memmem] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

@@ -13,19 +13,19 @@ function ensureDir(dir: string): string {
 }
 
 /**
- * Get the conversation memory directory
+ * Get the memmem directory
  *
  * Precedence:
- * 1. CONVERSATION_MEMORY_CONFIG_DIR env var (if set, for testing)
- * 2. ~/.config/conversation-memory/ (default)
+ * 1. MEMMEM_CONFIG_DIR env var (if set, for testing)
+ * 2. ~/.config/memmem/ (default)
  */
 export function getSuperpowersDir(): string {
   let dir: string;
 
-  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
-    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
+  if (process.env.MEMMEM_CONFIG_DIR) {
+    dir = process.env.MEMMEM_CONFIG_DIR;
   } else {
-    dir = path.join(os.homedir(), '.config', 'conversation-memory');
+    dir = path.join(os.homedir(), '.config', 'memmem');
   }
 
   return ensureDir(dir);
@@ -55,8 +55,8 @@ export function getIndexDir(): string {
  */
 export function getDbPath(): string {
   // Allow test override with direct DB path
-  if (process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH) {
-    return process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH!;
+  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
+    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH!;
   }
 
   return path.join(getIndexDir(), 'conversations.db');
@@ -75,8 +75,8 @@ export function getExcludeConfigPath(): string {
  */
 export function getExcludedProjects(): string[] {
   // Check env variable first
-  if (process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS) {
-    return process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS.split(',').map(p => p.trim());
+  if (process.env.MEMMEM_EXCLUDE_PROJECTS) {
+    return process.env.MEMMEM_EXCLUDE_PROJECTS.split(',').map(p => p.trim());
   }
 
   // Check for config file

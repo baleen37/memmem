@@ -27,13 +27,13 @@ async function ensureDependenciesAndBuild() {
 
   if (!installed) {
     try {
-      console.error('[conversation-memory] Installing dependencies (first run only)...');
+      console.error('[memmem] Installing dependencies (first run only)...');
       console.error('This may take 30-60 seconds...');
       await installDependencies(false);
-      console.error('[conversation-memory] Dependencies installed successfully.');
+      console.error('[memmem] Dependencies installed successfully.');
     } catch (error) {
       const analysis = analyzeError(error);
-      console.error('[conversation-memory] ERROR: Failed to install dependencies.');
+      console.error('[memmem] ERROR: Failed to install dependencies.');
       console.error(`Cause: ${analysis.cause}`);
       console.error(`Fix: ${analysis.fix}`);
       throw error;
@@ -44,12 +44,12 @@ async function ensureDependenciesAndBuild() {
 
   if (needsBuild) {
     try {
-      console.error(`[conversation-memory] Building plugin (${reason})...`);
+      console.error(`[memmem] Building plugin (${reason})...`);
       await runBuild();
-      console.error('[conversation-memory] Build completed successfully.');
+      console.error('[memmem] Build completed successfully.');
     } catch (error) {
       const analysis = analyzeError(error);
-      console.error('[conversation-memory] ERROR: Build failed.');
+      console.error('[memmem] ERROR: Build failed.');
       console.error(`Cause: ${analysis.cause}`);
       console.error(`Fix: ${analysis.fix}`);
       throw error;
@@ -65,7 +65,7 @@ async function main() {
     const mcpServerPath = join(PLUGIN_ROOT, 'dist', 'mcp-server.mjs');
 
     if (!existsSync(mcpServerPath)) {
-      console.error(`[conversation-memory] ERROR: MCP server not found at ${mcpServerPath}`);
+      console.error(`[memmem] ERROR: MCP server not found at ${mcpServerPath}`);
       console.error('Please run: npm run build');
       process.exit(1);
     }
@@ -89,17 +89,17 @@ async function main() {
     });
 
     child.on('error', (err) => {
-      console.error(`[conversation-memory] ERROR: Failed to start MCP server: ${err.message}`);
+      console.error(`[memmem] ERROR: Failed to start MCP server: ${err.message}`);
       process.exit(1);
     });
 
   } catch (error) {
-    console.error(`[conversation-memory] ERROR: ${error.message}`);
+    console.error(`[memmem] ERROR: ${error.message}`);
     process.exit(1);
   }
 }
 
 main().catch((error) => {
-  console.error(`[conversation-memory] Unexpected error: ${error.message}`);
+  console.error(`[memmem] Unexpected error: ${error.message}`);
   process.exit(1);
 });

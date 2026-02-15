@@ -24,7 +24,7 @@ function getSuperpowersDir() {
   if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
     dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
   } else {
-    dir = path.join(os.homedir(), ".config", "conversation-memory");
+    dir = path.join(os.homedir(), ".config", "memmem");
   }
   return ensureDir(dir);
 }
@@ -78,7 +78,7 @@ function createDatabase(wipe) {
     const hasV3Tables = v3Tables.every((t) => tableNames.has(t));
     if (!hasV3Tables && tableNames.has("exchanges")) {
       throw new Error(
-        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/conversation-memory/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
+        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/memmem/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
       );
     }
   }
@@ -234,7 +234,7 @@ async function handleSessionStart(db, project, config) {
       tokenCount: 0
     };
   }
-  const header = `# ${project} recent context (conversation-memory)
+  const header = `# ${project} recent context (memmem)
 
 `;
   const headerTokens = countTokens(header);
@@ -322,7 +322,7 @@ async function main() {
       db.close();
     }
   } catch (error) {
-    console.error(`[conversation-memory] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[memmem] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
@@ -1821,7 +1821,7 @@ var init_zai_provider = __esm({
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 function loadConfig() {
-  const configDir = join(process.env.HOME ?? "", ".config", "conversation-memory");
+  const configDir = join(process.env.HOME ?? "", ".config", "memmem");
   const configPath = join(configDir, "config.json");
   if (!existsSync(configPath)) {
     return null;
@@ -2167,7 +2167,7 @@ async function handleSummarize() {
     const project = getProject2();
     const config = loadConfig();
     if (!config) {
-      console.error("[conversation-memory] No LLM config found, skipping observation extraction");
+      console.error("[memmem] No LLM config found, skipping observation extraction");
       return;
     }
     const provider = await createProvider(config);
@@ -2195,7 +2195,7 @@ async function main2() {
       await handleObserve(input.tool_name, input.tool_input, input.tool_response);
     }
   } catch (error) {
-    console.error(`[conversation-memory] Error in observe: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[memmem] Error in observe: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(0);
   }
 }
@@ -2217,7 +2217,7 @@ if (!command || command === "--help" || command === "-h") {
 Conversation Memory CLI - V3 Architecture (observation-based semantic search)
 
 USAGE:
-  conversation-memory <command> [options]
+  memmem <command> [options]
 
 COMMANDS:
   inject              Inject recent context at session start (for SessionStart hook)

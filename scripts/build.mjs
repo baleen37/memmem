@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build script for conversation-memory plugin
+ * Build script for memmem plugin
  * Bundles the MCP server and CLI into standalone files using esbuild
  */
 

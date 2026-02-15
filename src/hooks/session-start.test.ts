@@ -78,7 +78,7 @@ describe('SessionStart Hook', () => {
 
       const result = await handleSessionStart(db, 'test-project', config);
 
-      expect(result.markdown).toContain('# test-project recent context (conversation-memory)');
+      expect(result.markdown).toContain('# test-project recent context (memmem)');
       expect(result.markdown).toContain('- Fixed auth bug: Resolved JWT validation issue in login flow');
       expect(result.includedCount).toBe(1);
     });

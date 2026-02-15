@@ -2,7 +2,7 @@
  * Tests for LLM config loading and provider factory
  *
  * These tests verify:
- * - Config file loading from ~/.config/conversation-memory/config.json
+ * - Config file loading from ~/.config/memmem/config.json
  * - Provider creation from config
  * - Error handling for invalid configs
  */

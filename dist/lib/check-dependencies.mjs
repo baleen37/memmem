@@ -60,7 +60,7 @@ export function installDependencies(silent = false) {
     const npmCommand = isWindows ? 'npm.cmd' : 'npm';
 
     if (!silent) {
-      console.error('[conversation-memory] Installing dependencies...');
+      console.error('[memmem] Installing dependencies...');
     }
 
     let stderrOutput = '';
@@ -86,7 +86,7 @@ export function installDependencies(silent = false) {
     child.on('exit', (code) => {
       if (code === 0) {
         if (!silent) {
-          console.error('[conversation-memory] Dependencies installed.');
+          console.error('[memmem] Dependencies installed.');
         }
         resolve();
       } else {
@@ -115,7 +115,7 @@ export function runBuild() {
     const isWindows = process.platform === 'win32';
     const npmCommand = isWindows ? 'npm.cmd' : 'npm';
 
-    console.error('[conversation-memory] Building plugin...');
+    console.error('[memmem] Building plugin...');
 
     let stderrOutput = '';
 
@@ -136,7 +136,7 @@ export function runBuild() {
 
     child.on('exit', (code) => {
       if (code === 0) {
-        console.error('[conversation-memory] Build completed.');
+        console.error('[memmem] Build completed.');
         resolve();
       } else {
         const error = new Error(`npm run build failed with exit code ${code}`);

@@ -4,7 +4,7 @@ const args = process.argv.slice(2);
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-Usage: conversation-memory stats
+Usage: memmem stats
 
 Display statistics about the indexed conversation archive.
 
@@ -17,7 +17,7 @@ Shows:
 
 EXAMPLES:
   # Show index statistics
-  conversation-memory stats
+  memmem stats
 `);
   process.exit(0);
 }

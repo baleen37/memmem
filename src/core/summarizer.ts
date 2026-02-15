@@ -68,7 +68,7 @@ function formatTokenUsage(usage: TokenUsage): string {
 /**
  * Call LLM provider for summarization.
  *
- * Loads configuration from ~/.config/conversation-memory/config.json.
+ * Loads configuration from ~/.config/memmem/config.json.
  * If config is missing or API call fails, returns empty summary with zero tokens.
  *
  * @param prompt - The prompt to send to the LLM
@@ -80,7 +80,7 @@ async function callLLM(prompt: string, sessionId?: string): Promise<SummaryWithU
 
   if (!config) {
     logWarn('No config.json found, skipping summarization');
-    console.log('[CONVERSATION_MEMORY] No config found at ~/.config/conversation-memory/config.json');
+    console.log('[CONVERSATION_MEMORY] No config found at ~/.config/memmem/config.json');
     return {
       summary: '',
       tokens: { input_tokens: 0, output_tokens: 0 }

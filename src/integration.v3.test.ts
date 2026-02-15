@@ -244,7 +244,7 @@ describe('V3 Integration Tests', () => {
       const result = await handleSessionStart(db, project, config);
 
       // Should inject observations
-      expect(result.markdown).toContain('# test-project recent context (conversation-memory)');
+      expect(result.markdown).toContain('# test-project recent context (memmem)');
       expect(result.markdown).toContain('- Fixed auth bug: Resolved JWT validation issue');
       expect(result.markdown).toContain('- Added rate limiting: Implemented Redis-backed rate limiting');
       expect(result.markdown).toContain('- Updated tests: Increased test coverage to 85%');

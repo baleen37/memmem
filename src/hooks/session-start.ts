@@ -9,7 +9,7 @@
  * 5. Returns formatted markdown for injection
  *
  * Output format:
- * # [project-name] recent context (conversation-memory)
+ * # [project-name] recent context (memmem)
  *
  * - observation title: content
  * - ...
@@ -104,7 +104,7 @@ export async function handleSessionStart(
   }
 
   // Step 3: Format as markdown with token budget
-  const header = `# ${project} recent context (conversation-memory)\n\n`;
+  const header = `# ${project} recent context (memmem)\n\n`;
   const headerTokens = countTokens(header);
 
   let markdown = header;

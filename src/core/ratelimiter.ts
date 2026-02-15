@@ -9,7 +9,7 @@
  * - Burst support via bucket capacity
  * - Non-blocking tryAcquire for immediate feedback
  * - Singleton instances for embedding and LLM rate limiting
- * - Configurable via ~/.config/conversation-memory/config.json
+ * - Configurable via ~/.config/memmem/config.json
  */
 
 import { loadConfig } from './llm/config.js';
@@ -168,7 +168,7 @@ export function createRateLimiter(config?: RateLimiterConfig): RateLimiter {
 /**
  * Gets the singleton rate limiter for embedding generation.
  *
- * Reads configuration from ~/.config/conversation-memory/config.json if available.
+ * Reads configuration from ~/.config/memmem/config.json if available.
  * Default: 5 requests per second, burst of 10
  *
  * @returns RateLimiter instance for embeddings
@@ -189,7 +189,7 @@ export function getEmbeddingRateLimiter(): RateLimiter {
 /**
  * Gets the singleton rate limiter for LLM API calls.
  *
- * Reads configuration from ~/.config/conversation-memory/config.json if available.
+ * Reads configuration from ~/.config/memmem/config.json if available.
  * Default: 2 requests per second, burst of 4
  *
  * @returns RateLimiter instance for LLM calls

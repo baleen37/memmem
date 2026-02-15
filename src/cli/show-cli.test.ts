@@ -95,7 +95,7 @@ describe('show-cli.ts', () => {
   const loadModule = async () => {
     if (!showCliModule) {
       // Set up the process.argv before importing
-      const modulePath = '/Users/jito.hello/dev/wooto/claude-plugins/.worktrees/chore-fix-mcp/plugins/conversation-memory/src/cli/show-cli.ts';
+      const modulePath = '/Users/jito.hello/dev/wooto/claude-plugins/.worktrees/chore-fix-mcp/plugins/memmem/src/cli/show-cli.ts';
       // We need to transpile and execute the module
       // For now, we'll simulate the behavior
       showCliModule = {
@@ -111,7 +111,7 @@ describe('show-cli.ts', () => {
               format = args[++i] as 'markdown' | 'html';
             } else if (arg === '--help' || arg === '-h') {
               console.log(`
-Usage: conversation-memory show [OPTIONS] <file>
+Usage: memmem show [OPTIONS] <file>
 
 Display a conversation from a JSONL file in a human-readable format.
 
@@ -121,13 +121,13 @@ OPTIONS:
 
 EXAMPLES:
   # Show conversation as markdown
-  conversation-memory show conversation.jsonl
+  memmem show conversation.jsonl
 
   # Generate HTML for browser viewing
-  conversation-memory show --format html conversation.jsonl > output.html
+  memmem show --format html conversation.jsonl > output.html
 
   # View with pipe
-  conversation-memory show conversation.jsonl | less
+  memmem show conversation.jsonl | less
 `);
               process.exit(0);
             } else if (!filePath) {
@@ -137,8 +137,8 @@ EXAMPLES:
 
           if (!filePath) {
             console.error('Error: No file specified');
-            console.error('Usage: conversation-memory show [OPTIONS] <file>');
-            console.error('Try: conversation-memory show --help');
+            console.error('Usage: memmem show [OPTIONS] <file>');
+            console.error('Try: memmem show --help');
             process.exit(1);
           }
 
@@ -174,7 +174,7 @@ EXAMPLES:
 
       expect(exitCode).toBe(0);
       expect(consoleLogs.length).toBeGreaterThan(0);
-      expect(consoleLogs[0]).toContain('Usage: conversation-memory show');
+      expect(consoleLogs[0]).toContain('Usage: memmem show');
       expect(consoleLogs[0]).toContain('Display a conversation from a JSONL file');
       expect(consoleLogs[0]).toContain('--format, -f FORMAT');
       expect(consoleLogs[0]).toContain('--help, -h');
@@ -194,7 +194,7 @@ EXAMPLES:
 
       expect(exitCode).toBe(0);
       expect(consoleLogs.length).toBeGreaterThan(0);
-      expect(consoleLogs[0]).toContain('Usage: conversation-memory show');
+      expect(consoleLogs[0]).toContain('Usage: memmem show');
       expect(consoleLogs[0]).toContain('OPTIONS:');
     });
   });
@@ -282,8 +282,8 @@ EXAMPLES:
 
       expect(exitCode).toBe(1);
       expect(consoleErrors).toContain('Error: No file specified');
-      expect(consoleErrors).toContain('Usage: conversation-memory show [OPTIONS] <file>');
-      expect(consoleErrors).toContain('Try: conversation-memory show --help');
+      expect(consoleErrors).toContain('Usage: memmem show [OPTIONS] <file>');
+      expect(consoleErrors).toContain('Try: memmem show --help');
     });
 
     test('shows error when file does not exist', async () => {
@@ -567,8 +567,8 @@ EXAMPLES:
         // Expected due to process.exit
       }
 
-      expect(consoleErrors).toContain('Usage: conversation-memory show [OPTIONS] <file>');
-      expect(consoleErrors).toContain('Try: conversation-memory show --help');
+      expect(consoleErrors).toContain('Usage: memmem show [OPTIONS] <file>');
+      expect(consoleErrors).toContain('Try: memmem show --help');
     });
 
     test('includes file error message in output', async () => {

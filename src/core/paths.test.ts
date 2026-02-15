@@ -21,7 +21,7 @@ let originalEnv: NodeJS.ProcessEnv;
 let tempDirs: string[] = [];
 
 function setupTempDir(): string {
-  const tempDir = path.join(os.tmpdir(), `conversation-memory-test-${Date.now()}-${Math.random()}`);
+  const tempDir = path.join(os.tmpdir(), `memmem-test-${Date.now()}-${Math.random()}`);
   tempDirs.push(tempDir);
   return tempDir;
 }
@@ -111,12 +111,12 @@ describe('paths utilities', () => {
       expect(result).toBe(customDir);
     });
 
-    test('uses default ~/.config/conversation-memory when env var not set', () => {
+    test('uses default ~/.config/memmem when env var not set', () => {
       // Delete the env var to test default behavior
       delete process.env.CONVERSATION_MEMORY_CONFIG_DIR;
 
       const result = getSuperpowersDir();
-      const expected = path.join(os.homedir(), '.config', 'conversation-memory');
+      const expected = path.join(os.homedir(), '.config', 'memmem');
 
       expect(result).toBe(expected);
     });

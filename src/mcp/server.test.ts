@@ -1,12 +1,12 @@
 /**
  * MCP Server Tests
  *
- * Comprehensive tests for the conversation-memory MCP server tools.
+ * Comprehensive tests for the memmem MCP server tools.
  * Tests follow TDD principles with mocked dependencies.
  *
  * Test Coverage:
  *
- * 1. **conversation-memory__search tool**:
+ * 1. **memmem__search tool**:
  *   - Query parameter validation (string and array forms)
  *   - Mode parameter validation (vector/text/both)
  *   - Date format validation (YYYY-MM-DD regex)
@@ -16,7 +16,7 @@
  *   - Strict schema validation (no additional properties)
  *   - Search results handling
  *
- * 2. **conversation-memory__read tool**:
+ * 2. **memmem__read tool**:
  *   - Path parameter validation
  *   - Pagination parameters (startLine/endLine)
  *   - Error handling
@@ -163,7 +163,7 @@ async function mockToolCall(toolName: string, args: any) {
   }
 }
 
-describe('MCP Server - conversation-memory__search tool', () => {
+describe('MCP Server - memmem__search tool', () => {
   describe('Query parameter validation', () => {
     test('rejects query shorter than 2 characters', async () => {
       const result = await mockToolCall('search', { query: 'a' });
@@ -426,7 +426,7 @@ describe('MCP Server - conversation-memory__search tool', () => {
   });
 });
 
-describe('MCP Server - conversation-memory__read tool', () => {
+describe('MCP Server - memmem__read tool', () => {
   describe('Path parameter validation', () => {
     test('rejects empty path', async () => {
       const result = await mockToolCall('read', { path: '' });

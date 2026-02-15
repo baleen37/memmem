@@ -3,10 +3,10 @@
  *
  * This module provides:
  * - LLMConfig interface for configuration file structure
- * - loadConfig() function to read configuration from ~/.config/conversation-memory/config.json
+ * - loadConfig() function to read configuration from ~/.config/memmem/config.json
  * - createProvider() factory function to create LLMProvider instances from config
  *
- * Configuration file location: ~/.config/conversation-memory/config.json
+ * Configuration file location: ~/.config/memmem/config.json
  *
  * @example
  * ```json
@@ -62,7 +62,7 @@ export interface RateLimitsConfig {
 /**
  * LLM configuration interface.
  *
- * Defines the structure of the config file at ~/.config/conversation-memory/config.json
+ * Defines the structure of the config file at ~/.config/memmem/config.json
  */
 export interface LLMConfig {
   /** Provider: 'gemini' or 'zai' */
@@ -78,7 +78,7 @@ export interface LLMConfig {
 /**
  * Loads LLM configuration from the config file.
  *
- * Reads ~/.config/conversation-memory/config.json and parses it.
+ * Reads ~/.config/memmem/config.json and parses it.
  *
  * @returns LLMConfig if file exists and is valid, null otherwise
  *
@@ -93,7 +93,7 @@ export interface LLMConfig {
  * ```
  */
 export function loadConfig(): LLMConfig | null {
-  const configDir = join(process.env.HOME ?? '', '.config', 'conversation-memory');
+  const configDir = join(process.env.HOME ?? '', '.config', 'memmem');
   const configPath = join(configDir, 'config.json');
 
   // Return null if config file doesn't exist

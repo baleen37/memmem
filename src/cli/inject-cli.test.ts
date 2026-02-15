@@ -1,5 +1,5 @@
 /**
- * Tests for Inject CLI - Handle SessionStart hook for conversation-memory.
+ * Tests for Inject CLI - Handle SessionStart hook for memmem.
  *
  * This CLI is responsible for:
  * - Reading session data from stdin (JSON)
@@ -433,11 +433,11 @@ describe('Inject CLI', () => {
       try {
         JSON.parse(invalidJson);
       } catch (error) {
-        console.error(`[conversation-memory] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`[memmem] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
       }
 
       expect(consoleErrors.length).toBeGreaterThan(0);
-      expect(consoleErrors[0]).toContain('[conversation-memory] Error in inject:');
+      expect(consoleErrors[0]).toContain('[memmem] Error in inject:');
     });
 
     test('should log error when handleSessionStart throws', async () => {
@@ -454,20 +454,20 @@ describe('Inject CLI', () => {
           projectOnly: true,
         });
       } catch (error) {
-        console.error(`[conversation-memory] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`[memmem] Error in inject: ${error instanceof Error ? error.message : String(error)}`);
       }
 
       expect(consoleErrors.length).toBeGreaterThan(0);
-      expect(consoleErrors[0]).toContain('[conversation-memory] Error in inject:');
+      expect(consoleErrors[0]).toContain('[memmem] Error in inject:');
       expect(consoleErrors[0]).toContain('Database connection failed');
     });
 
     test('should handle non-Error objects in error handler', () => {
       const stringError = 'String error message';
 
-      console.error(`[conversation-memory] Error in inject: ${stringError}`);
+      console.error(`[memmem] Error in inject: ${stringError}`);
 
-      expect(consoleErrors).toContain('[conversation-memory] Error in inject: String error message');
+      expect(consoleErrors).toContain('[memmem] Error in inject: String error message');
     });
   });
 

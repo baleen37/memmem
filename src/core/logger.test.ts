@@ -1,5 +1,5 @@
 /**
- * Tests for logger.ts - Logging functionality for conversation-memory.
+ * Tests for logger.ts - Logging functionality for memmem.
  *
  * This logger provides:
  * - logInfo() - logs info messages
@@ -16,7 +16,7 @@ import { LogLevel, logInfo, logWarn, logError, logDebug } from './logger.js';
 
 // Mock the paths module
 vi.mock('./paths.js', () => ({
-  getLogFilePath: vi.fn(() => '/tmp/test-conversation-memory.log'),
+  getLogFilePath: vi.fn(() => '/tmp/test-memmem.log'),
 }));
 
 // Mock fs.appendFileSync
@@ -64,7 +64,7 @@ describe('logger', () => {
       logInfo(testMessage);
 
       expect(mockAppendFileSync).toHaveBeenCalledWith(
-        '/tmp/test-conversation-memory.log',
+        '/tmp/test-memmem.log',
         expect.stringContaining('[INFO]'),
         'utf-8'
       );
@@ -114,7 +114,7 @@ describe('logger', () => {
       logWarn(testMessage);
 
       expect(mockAppendFileSync).toHaveBeenCalledWith(
-        '/tmp/test-conversation-memory.log',
+        '/tmp/test-memmem.log',
         expect.stringContaining('[WARN]'),
         'utf-8'
       );
@@ -166,7 +166,7 @@ describe('logger', () => {
       logError(testMessage);
 
       expect(mockAppendFileSync).toHaveBeenCalledWith(
-        '/tmp/test-conversation-memory.log',
+        '/tmp/test-memmem.log',
         expect.stringContaining('[ERROR]'),
         'utf-8'
       );
@@ -243,7 +243,7 @@ describe('logger', () => {
       logDebug('Debug message');
 
       expect(mockAppendFileSync).toHaveBeenCalledWith(
-        '/tmp/test-conversation-memory.log',
+        '/tmp/test-memmem.log',
         expect.stringContaining('[DEBUG]'),
         'utf-8'
       );
@@ -355,8 +355,8 @@ describe('logger', () => {
       const firstCall = mockAppendFileSync.mock.calls[0];
       const secondCall = mockAppendFileSync.mock.calls[1];
 
-      expect(firstCall[0]).toBe('/tmp/test-conversation-memory.log');
-      expect(secondCall[0]).toBe('/tmp/test-conversation-memory.log');
+      expect(firstCall[0]).toBe('/tmp/test-memmem.log');
+      expect(secondCall[0]).toBe('/tmp/test-memmem.log');
     });
 
     test('should use utf-8 encoding', () => {

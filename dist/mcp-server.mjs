@@ -17878,7 +17878,7 @@ function getSuperpowersDir() {
   if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
     dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
   } else {
-    dir = path.join(os.homedir(), ".config", "conversation-memory");
+    dir = path.join(os.homedir(), ".config", "memmem");
   }
   return ensureDir(dir);
 }
@@ -17916,7 +17916,7 @@ function createDatabase(wipe) {
     const hasV3Tables = v3Tables.every((t) => tableNames.has(t));
     if (!hasV3Tables && tableNames.has("exchanges")) {
       throw new Error(
-        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/conversation-memory/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
+        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/memmem/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
       );
     }
   }
@@ -18258,7 +18258,7 @@ function handleRead(params) {
 }
 var server = new Server(
   {
-    name: "conversation-memory",
+    name: "memmem",
     version: "3.0.0"
   },
   {

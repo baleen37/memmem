@@ -1,6 +1,6 @@
 # Scripts Directory
 
-Build, wrapper, and migration scripts for the conversation-memory plugin.
+Build, wrapper, and migration scripts for the memmem plugin.
 
 ## Overview
 

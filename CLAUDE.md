@@ -1,4 +1,4 @@
-# conversation-memory
+# memmem
 
 ## Purpose
 
@@ -80,16 +80,16 @@ const db = initDatabaseV3();
 
 **LLM Configuration:**
 
-- Requires `~/.config/conversation-memory/config.json`
+- Requires `~/.config/memmem/config.json`
 - Supported providers: `gemini`, `zai`
 - If no config found, indexing works but summarization is skipped
 
 **Storage Locations:**
 
-- Database: `~/.config/conversation-memory/conversation-index/conversations.db`
-- Archive: `~/.config/conversation-memory/conversation-archive/`
-- Config: `~/.config/conversation-memory/config.json`
-- Logs: `~/.config/conversation-memory/logs/`
+- Database: `~/.config/memmem/conversation-index/conversations.db`
+- Archive: `~/.config/memmem/conversation-archive/`
+- Config: `~/.config/memmem/config.json`
+- Logs: `~/.config/memmem/logs/`
 
 ### Testing Requirements
 
@@ -155,14 +155,14 @@ If upgrading from v2, you must start with a fresh database:
 
 ```bash
 # 1. Backup existing database (optional)
-cp ~/.config/conversation-memory/conversation-index/conversations.db \
-   ~/.config/conversation-memory/conversation-index/conversations.v2.backup
+cp ~/.config/memmem/conversation-index/conversations.db \
+   ~/.config/memmem/conversation-index/conversations.v2.backup
 
 # 2. Remove v2 database
-rm ~/.config/conversation-memory/conversation-index/conversations.db
+rm ~/.config/memmem/conversation-index/conversations.db
 
 # 3. Rebuild plugin
-cd plugins/conversation-memory
+cd plugins/memmem
 npm install
 npm run build
 

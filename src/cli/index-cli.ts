@@ -6,7 +6,7 @@ if (!command || command === '--help' || command === '-h') {
 Conversation Memory CLI - V3 Architecture (observation-based semantic search)
 
 USAGE:
-  conversation-memory <command> [options]
+  memmem <command> [options]
 
 COMMANDS:
   inject              Inject recent context at session start (for SessionStart hook)

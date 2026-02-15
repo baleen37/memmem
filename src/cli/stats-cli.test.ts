@@ -91,8 +91,8 @@ describe('stats-cli', () => {
 
   describe('help text content', () => {
     test('should contain usage information', () => {
-      const expectedUsage = 'Usage: conversation-memory stats';
-      expect(expectedUsage).toBe('Usage: conversation-memory stats');
+      const expectedUsage = 'Usage: memmem stats';
+      expect(expectedUsage).toBe('Usage: memmem stats');
     });
 
     test('should describe what stats displays', () => {

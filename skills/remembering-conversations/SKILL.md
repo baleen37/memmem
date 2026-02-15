@@ -78,8 +78,8 @@ in these situations:
 
 You CAN use MCP tools directly, but **DON'T**:
 
-- `mcp__plugin_conversation-memory_conversation-memory__search`
-- `mcp__plugin_conversation-memory_conversation-memory__read`
+- `mcp__plugin_memmem_memmem__search`
+- `mcp__plugin_memmem_memmem__read`
 
 Using these directly wastes your context window. **Always dispatch the agent instead.**
 
@@ -92,11 +92,11 @@ See [MCP-TOOLS.md](./MCP-TOOLS.md) for complete API reference if needed for adva
 <details>
 <summary>Click to expand legacy direct tool usage instructions</summary>
 
-Use the MCP tools provided by conversation-memory plugin:
+Use the MCP tools provided by memmem plugin:
 
 ### Step 1: Search
 
-Use `mcp__plugin_conversation-memory_conversation-memory__search` to find relevant conversations:
+Use `mcp__plugin_memmem_memmem__search` to find relevant conversations:
 
 ```typescript
 {
@@ -127,7 +127,7 @@ Use `mcp__plugin_conversation-memory_conversation-memory__search` to find releva
 
 ### Step 2: Read Details
 
-Use `mcp__plugin_conversation-memory_conversation-memory__read` to view full conversations:
+Use `mcp__plugin_memmem_memmem__read` to view full conversations:
 
 ```typescript
 {

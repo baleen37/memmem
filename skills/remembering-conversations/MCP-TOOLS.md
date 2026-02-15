@@ -1,6 +1,6 @@
 # MCP Tools API Reference
 
-This document provides detailed API reference for the conversation-memory MCP tools.
+This document provides detailed API reference for the memmem MCP tools.
 
 **⚠️ Warning:** Direct MCP tool usage wastes context. Always use the `search-conversation` agent instead.
 
@@ -10,7 +10,7 @@ This reference is for advanced use cases only.
 
 ## Overview: Progressive Disclosure
 
-The conversation-memory system uses a **3-layer progressive disclosure pattern** to minimize context usage:
+The memmem system uses a **3-layer progressive disclosure pattern** to minimize context usage:
 
 1. **search()** - Returns compact observations (~30t each)
 2. **get_observations()** - Full observation details (~200-500t each)
@@ -276,7 +276,7 @@ Read full conversation transcript (Layer 3 of progressive disclosure).
 
 ```json
 {
-  "path": "/Users/user/.claude/conversation-memory/conversation-archive/my-project/session-abc123.jsonl"
+  "path": "/Users/user/.claude/memmem/conversation-archive/my-project/session-abc123.jsonl"
 }
 ```
 

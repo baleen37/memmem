@@ -1,5 +1,5 @@
 /**
- * Tests for Observe CLI - Handle PostToolUse and Stop hooks for conversation-memory.
+ * Tests for Observe CLI - Handle PostToolUse and Stop hooks for memmem.
  *
  * This CLI is responsible for:
  * - PostToolUse: Compresses and stores tool events in pending_events
@@ -208,7 +208,7 @@ describe('Observe CLI', () => {
 
       const config = loadConfig();
       if (!config) {
-        console.error('[conversation-memory] No LLM config found, skipping observation extraction');
+        console.error('[memmem] No LLM config found, skipping observation extraction');
         expect(handleStop).not.toHaveBeenCalled();
       }
 
@@ -293,9 +293,9 @@ describe('Observe CLI', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const error = new Error('Test error');
-      consoleErrorSpy(`[conversation-memory] Error in observe: ${error.message}`);
+      consoleErrorSpy(`[memmem] Error in observe: ${error.message}`);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[conversation-memory] Error in observe: Test error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[memmem] Error in observe: Test error');
 
       consoleErrorSpy.mockRestore();
     });
@@ -309,7 +309,7 @@ describe('Observe CLI', () => {
         JSON.parse(invalidJson);
       } catch (error) {
         if (error instanceof Error) {
-          consoleErrorSpy(`[conversation-memory] Error in observe: ${error.message}`);
+          consoleErrorSpy(`[memmem] Error in observe: ${error.message}`);
           expect(error instanceof Error).toBe(true);
         }
       }

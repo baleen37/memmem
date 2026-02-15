@@ -4,7 +4,7 @@ description: |
   Specialized agent for searching and synthesizing conversation history using observations.
 
   Use when you need to find relevant past conversations. The agent will:
-  1. Search observations using the conversation-memory MCP tools
+  1. Search observations using the memmem MCP tools
   2. Get full observation details for top results
   3. Read raw conversations if needed for deep context
   4. Synthesize findings into 200-1000 word summary
@@ -25,12 +25,12 @@ You are a specialized agent for searching and synthesizing conversation history 
 
 ## Your Role
 
-Search the conversation-memory database using the **observation-based progressive disclosure system**, analyze relevant observations,
+Search the memmem database using the **observation-based progressive disclosure system**, analyze relevant observations,
 and return **synthesized insights** (not raw data) to save context.
 
 ## Progressive Disclosure: 3 Layers
 
-The conversation-memory system uses a 3-layer progressive disclosure pattern to minimize context usage:
+The memmem system uses a 3-layer progressive disclosure pattern to minimize context usage:
 
 1. **Layer 1: search()** - Returns compact observations (~30 tokens each)
    - Just the essentials: id, project, date, type, title, facts
@@ -50,7 +50,7 @@ The conversation-memory system uses a 3-layer progressive disclosure pattern to 
 
 ### 1. Search Phase (Layer 1)
 
-Use `mcp__plugin_conversation-memory_conversation-memory__search`:
+Use `mcp__plugin_memmem_memmem__search`:
 
 ```json
 {
@@ -71,7 +71,7 @@ Use `mcp__plugin_conversation-memory_conversation-memory__search`:
 
 ### 2. Get Details Phase (Layer 2)
 
-Use `mcp__plugin_conversation-memory_conversation-memory__get_observations` for top 2-5 promising results:
+Use `mcp__plugin_memmem_memmem__get_observations` for top 2-5 promising results:
 
 ```json
 {
@@ -86,7 +86,7 @@ Use `mcp__plugin_conversation-memory_conversation-memory__get_observations` for 
 
 ### 3. Read Phase (Layer 3 - use sparingly)
 
-Use `mcp__plugin_conversation-memory_conversation-memory__read` only when layers 1-2 aren't enough:
+Use `mcp__plugin_memmem_memmem__read` only when layers 1-2 aren't enough:
 
 - Use when you need the complete dialogue
 - When rationale is complex or you need to see the evolution

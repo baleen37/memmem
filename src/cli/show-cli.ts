@@ -14,7 +14,7 @@ for (let i = 0; i < args.length; i++) {
     format = args[++i] as 'markdown' | 'html';
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
-Usage: conversation-memory show [OPTIONS] <file>
+Usage: memmem show [OPTIONS] <file>
 
 Display a conversation from a JSONL file in a human-readable format.
 
@@ -24,13 +24,13 @@ OPTIONS:
 
 EXAMPLES:
   # Show conversation as markdown
-  conversation-memory show conversation.jsonl
+  memmem show conversation.jsonl
 
   # Generate HTML for browser viewing
-  conversation-memory show --format html conversation.jsonl > output.html
+  memmem show --format html conversation.jsonl > output.html
 
   # View with pipe
-  conversation-memory show conversation.jsonl | less
+  memmem show conversation.jsonl | less
 `);
     process.exit(0);
   } else if (!filePath) {
@@ -40,8 +40,8 @@ EXAMPLES:
 
 if (!filePath) {
   console.error('Error: No file specified');
-  console.error('Usage: conversation-memory show [OPTIONS] <file>');
-  console.error('Try: conversation-memory show --help');
+  console.error('Usage: memmem show [OPTIONS] <file>');
+  console.error('Try: memmem show --help');
   process.exit(1);
 }
 
