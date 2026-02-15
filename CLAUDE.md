@@ -9,14 +9,17 @@ Automatically indexes conversations and provides progressive disclosure search t
 
 | File | Description |
 | ---- | ----------- |
-| `src/core/db.v3.ts` | V3 database schema with observations, pending_events, and vector embeddings |
+| `src/core/db.v3.ts` | V3 database schema - use `openDatabase()` in production (preserves data), `initDatabaseV3()` only in tests |
 | `src/cli/inject-cli.ts` | SessionStart hook - injects recent observations into session context |
 | `src/cli/observe-cli.ts` | PostToolUse/Stop hooks - stores events and extracts observations |
 | `src/mcp/server.ts` | MCP server exposing search, get_observations, and read tools |
 | `src/core/observations.v3.ts` | Observation extraction and management logic |
 | `src/core/search.v3.ts` | Vector and text search across observations |
+| `src/core/embeddings.ts` | EmbeddingGemma model wrapper for vector embeddings |
+| `src/core/llm/` | LLM providers (Gemini, ZAI) for summarization |
 | `package.json` | Dependencies and scripts (Node.js only - not Bun) |
 | `hooks/hooks.json` | Hook configuration for SessionStart, PostToolUse, and Stop events |
+| `vitest.config.ts` | Test configuration (max 4 threads, 15s timeout) |
 
 ## Subdirectories
 
@@ -94,9 +97,12 @@ const db = initDatabaseV3();
 ### Testing Requirements
 
 - Run `npm test` before committing (NOT `bun test`)
-- Ensure all tests pass (750 tests total)
+- Run single test file: `npm test path/to/file.test.ts`
+- Run tests in watch mode: `npm run test:watch`
+- Ensure all tests pass (634 tests across 26 test files)
 - Integration tests use in-memory SQLite (`:memory:`)
 - Mock LLM providers in tests to avoid API calls
+- Test files are co-located with source files (`**/*.test.ts`)
 
 ### Common Pitfalls
 
