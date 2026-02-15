@@ -21,7 +21,9 @@ function ensureDir(dir) {
 }
 function getSuperpowersDir() {
   let dir;
-  if (process.env.MEMMEM_CONFIG_DIR) {
+  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
+    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
+  } else if (process.env.MEMMEM_CONFIG_DIR) {
     dir = process.env.MEMMEM_CONFIG_DIR;
   } else {
     dir = path.join(os.homedir(), ".config", "memmem");
@@ -32,6 +34,9 @@ function getIndexDir() {
   return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
 }
 function getDbPath() {
+  if (process.env.CONVERSATION_MEMORY_DB_PATH) {
+    return process.env.CONVERSATION_MEMORY_DB_PATH;
+  }
   if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
     return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
   }
