@@ -71,35 +71,6 @@ export function getDbPath(): string {
 }
 
 /**
- * Get exclude config path
- */
-export function getExcludeConfigPath(): string {
-  return path.join(getIndexDir(), 'exclude.txt');
-}
-
-/**
- * Get list of projects to exclude from indexing
- * Configurable via env var or config file
- */
-export function getExcludedProjects(): string[] {
-  // Check env variable first (support both naming conventions)
-  const excludeEnvVar = process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS || process.env.MEMMEM_EXCLUDE_PROJECTS;
-  if (excludeEnvVar) {
-    return excludeEnvVar.split(',').map(p => p.trim());
-  }
-
-  // Check for config file
-  const configPath = getExcludeConfigPath();
-  if (fs.existsSync(configPath)) {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    return content.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
-  }
-
-  // Default: no exclusions
-  return [];
-}
-
-/**
  * Get log directory
  */
 export function getLogDir(): string {
@@ -112,11 +83,4 @@ export function getLogDir(): string {
 export function getLogFilePath(): string {
   const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   return path.join(getLogDir(), `${date}.log`);
-}
-
-/**
- * Get observer PID file path
- */
-export function getObserverPidPath(): string {
-  return path.join(getSuperpowersDir(), 'observer.pid');
 }

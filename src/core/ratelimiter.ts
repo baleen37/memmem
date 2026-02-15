@@ -156,16 +156,6 @@ let embeddingLimiter: RateLimiter | null = null;
 let llmLimiter: RateLimiter | null = null;
 
 /**
- * Creates a new RateLimiter instance.
- *
- * @param config - Configuration options
- * @returns New RateLimiter instance
- */
-export function createRateLimiter(config?: RateLimiterConfig): RateLimiter {
-  return new RateLimiter(config);
-}
-
-/**
  * Gets the singleton rate limiter for embedding generation.
  *
  * Reads configuration from ~/.config/memmem/config.json if available.

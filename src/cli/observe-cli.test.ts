@@ -17,7 +17,7 @@ import type { LLMProvider } from '../core/llm/index.js';
 // Mock the modules
 vi.mock('../core/db.v3.js', () => ({
   initDatabaseV3: vi.fn(),
-  getPendingEventsV3: vi.fn(),
+  getAllPendingEventsV3: vi.fn(),
   getObservationV3: vi.fn(),
 }));
 
