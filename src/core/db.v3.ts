@@ -48,7 +48,7 @@ export interface ObservationResultV3 {
   createdAt: number;
 }
 
-export interface SearchOptionsV3 {
+interface SearchOptionsV3 {
   project?: string;
   sessionId?: string;
   after?: number;
@@ -309,23 +309,4 @@ export function getObservationV3(
 
   const result = stmt.get(id) as ObservationResultV3 | undefined;
   return result ?? null;
-}
-
-/**
- * Delete an observation by ID
- */
-export function deleteObservationV3(
-  db: Database.Database,
-  id: number
-): boolean {
-  const idStr = String(id);
-
-  // Delete from vector table
-  db.prepare('DELETE FROM vec_observations WHERE id = ?').run(idStr);
-
-  // Delete from main table
-  const stmt = db.prepare('DELETE FROM observations WHERE id = ?');
-  const result = stmt.run(id);
-
-  return result.changes > 0;
 }
