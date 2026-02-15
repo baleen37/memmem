@@ -10,8 +10,6 @@ import {
   getArchiveDir,
   getIndexDir,
   getDbPath,
-  getExcludeConfigPath,
-  getExcludedProjects,
   getLogDir,
   getLogFilePath,
 } from './paths.js';
@@ -235,129 +233,6 @@ describe('paths utilities', () => {
     });
   });
 
-  describe('getExcludeConfigPath', () => {
-    test('returns exclude config file path in index directory', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const result = getExcludeConfigPath();
-      const expected = path.join(tempDir, 'conversation-index', 'exclude.txt');
-
-      expect(result).toBe(expected);
-    });
-  });
-
-  describe('getExcludedProjects', () => {
-    test('returns empty array when no exclusions configured', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual([]);
-    });
-
-    test('reads and parses exclude config file', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const excludePath = path.join(tempDir, 'conversation-index', 'exclude.txt');
-      const content = 'project-a\nproject-b\nproject-c';
-      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-      fs.writeFileSync(excludePath, content);
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b', 'project-c']);
-    });
-
-    test('trims whitespace from project names', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const excludePath = path.join(tempDir, 'conversation-index', 'exclude.txt');
-      const content = '  project-a  \nproject-b\n  project-c';
-      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-      fs.writeFileSync(excludePath, content);
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b', 'project-c']);
-    });
-
-    test('filters out empty lines', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const excludePath = path.join(tempDir, 'conversation-index', 'exclude.txt');
-      const content = 'project-a\n\n\nproject-b\n\nproject-c';
-      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-      fs.writeFileSync(excludePath, content);
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b', 'project-c']);
-    });
-
-    test('filters out lines starting with #', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const excludePath = path.join(tempDir, 'conversation-index', 'exclude.txt');
-      const content = '# This is a comment\nproject-a\n# Another comment\nproject-b';
-      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-      fs.writeFileSync(excludePath, content);
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b']);
-    });
-
-    test('returns empty array if exclude file does not exist', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      // Don't create the exclude file
-      const result = getExcludedProjects();
-
-      expect(result).toEqual([]);
-    });
-
-    test('CONVERSATION_SEARCH_EXCLUDE_PROJECTS env var takes precedence', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      // Create an exclude file
-      const excludePath = path.join(tempDir, 'conversation-index', 'exclude.txt');
-      fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-      fs.writeFileSync(excludePath, 'file-project-a\nfile-project-b');
-
-      // Set env var
-      process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS = 'env-project-a,env-project-b';
-
-      const result = getExcludedProjects();
-
-      // Env var should take precedence
-      expect(result).toEqual(['env-project-a', 'env-project-b']);
-    });
-
-    test('parses CONVERSATION_SEARCH_EXCLUDE_PROJECTS comma-separated list', () => {
-      process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS = 'project-a,project-b,project-c';
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b', 'project-c']);
-    });
-
-    test('trims whitespace from comma-separated env var list', () => {
-      process.env.CONVERSATION_SEARCH_EXCLUDE_PROJECTS = ' project-a , project-b , project-c ';
-
-      const result = getExcludedProjects();
-
-      expect(result).toEqual(['project-a', 'project-b', 'project-c']);
-    });
-  });
-
   describe('getLogDir', () => {
     test('returns log directory path under superpowers dir', () => {
       const tempDir = setupTempDir();
@@ -440,17 +315,6 @@ describe('paths utilities', () => {
 
       expect(dbPath.startsWith(indexDir)).toBe(true);
       expect(dbPath).toBe(path.join(indexDir, 'conversations.db'));
-    });
-
-    test('exclude config path is in index directory', () => {
-      const tempDir = setupTempDir();
-      process.env.CONVERSATION_MEMORY_CONFIG_DIR = tempDir;
-
-      const excludePath = getExcludeConfigPath();
-      const indexDir = getIndexDir();
-
-      expect(excludePath.startsWith(indexDir)).toBe(true);
-      expect(excludePath).toBe(path.join(indexDir, 'exclude.txt'));
     });
 
     test('log file path is in log directory', () => {
