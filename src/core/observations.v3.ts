@@ -130,28 +130,3 @@ export async function findByIds(
     timestamp: r.timestamp
   }));
 }
-
-/**
- * Find observations by project.
- *
- * @param db - Database instance
- * @param project - Project name
- * @param limit - Optional limit (defaults to 100)
- * @returns Array of observations (empty if none found)
- */
-export async function findByProject(
-  db: Database.Database,
-  project: string,
-  limit: number = 100
-): Promise<Observation[]> {
-  const results = searchObservationsV3(db, { project, limit });
-
-  return results.map(r => ({
-    id: r.id,
-    title: r.title,
-    content: r.content,
-    project: r.project,
-    sessionId: r.sessionId,
-    timestamp: r.timestamp
-  }));
-}

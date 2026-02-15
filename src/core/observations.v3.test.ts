@@ -4,8 +4,7 @@ import { initDatabaseV3 } from './db.v3.js';
 import {
   create,
   findById,
-  findByIds,
-  findByProject
+  findByIds
 } from './observations.v3.js';
 
 // Mock embedding generation - create a valid 768-dimensional vector
@@ -149,48 +148,6 @@ describe('observations.v3', () => {
     it('should return empty array for non-existent ids', async () => {
       const observations = await findByIds(db, [99998, 99999]);
       expect(observations).toHaveLength(0);
-    });
-  });
-
-  describe('findByProject', () => {
-    it('should retrieve observations by project', async () => {
-      await create(db, 'Obs 1', 'Content 1', 'project-a');
-      await create(db, 'Obs 2', 'Content 2', 'project-a');
-      await create(db, 'Obs 3', 'Content 3', 'project-b');
-
-      const observations = await findByProject(db, 'project-a');
-
-      expect(observations).toHaveLength(2);
-      expect(observations[0].project).toBe('project-a');
-      expect(observations[1].project).toBe('project-a');
-    });
-
-    it('should respect limit parameter', async () => {
-      for (let i = 0; i < 5; i++) {
-        await create(db, `Obs ${i}`, `Content ${i}`, 'project-c');
-      }
-
-      const observations = await findByProject(db, 'project-c', 3);
-
-      expect(observations).toHaveLength(3);
-    });
-
-    it('should return empty array for non-existent project', async () => {
-      const observations = await findByProject(db, 'non-existent');
-      expect(observations).toHaveLength(0);
-    });
-
-    it('should order by timestamp DESC', async () => {
-      const now = Date.now();
-      await create(db, 'Old', 'Old content', 'project-d', undefined, now - 1000);
-      await create(db, 'New', 'New content', 'project-d', undefined, now);
-      await create(db, 'Middle', 'Middle content', 'project-d', undefined, now - 500);
-
-      const observations = await findByProject(db, 'project-d');
-
-      expect(observations[0].title).toBe('New');
-      expect(observations[1].title).toBe('Middle');
-      expect(observations[2].title).toBe('Old');
     });
   });
 });
