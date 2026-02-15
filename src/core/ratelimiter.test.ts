@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
-import { RateLimiter, createRateLimiter, getEmbeddingRateLimiter, getLLMRateLimiter, resetRateLimiters } from './ratelimiter.js';
+import { RateLimiter, getEmbeddingRateLimiter, getLLMRateLimiter, resetRateLimiters } from './ratelimiter.js';
 
 // Mock the config module
 let mockConfigReturnValue: { ratelimit?: { embedding?: { requestsPerSecond?: number; burstSize?: number }; llm?: { requestsPerSecond?: number; burstSize?: number } } } | null = null;
@@ -169,13 +169,6 @@ describe('Factory Functions', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  test('createRateLimiter creates new instance each time', () => {
-    const limiter1 = createRateLimiter({ requestsPerSecond: 5 });
-    const limiter2 = createRateLimiter({ requestsPerSecond: 5 });
-
-    expect(limiter1).not.toBe(limiter2);
   });
 
   test('getEmbeddingRateLimiter returns singleton', () => {
