@@ -21,8 +21,8 @@ function ensureDir(dir) {
 }
 function getSuperpowersDir() {
   let dir;
-  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
-    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
+  if (process.env.MEMMEM_CONFIG_DIR) {
+    dir = process.env.MEMMEM_CONFIG_DIR;
   } else {
     dir = path.join(os.homedir(), ".config", "memmem");
   }
@@ -32,8 +32,8 @@ function getIndexDir() {
   return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
 }
 function getDbPath() {
-  if (process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH) {
-    return process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH;
+  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
+    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
   }
   return path.join(getIndexDir(), "conversations.db");
 }
@@ -1577,134 +1577,18 @@ var init_logger = __esm({
   }
 });
 
-// src/core/llm/gemini-provider.ts
-var gemini_provider_exports = {};
-__export(gemini_provider_exports, {
-  GeminiProvider: () => GeminiProvider
-});
-var DEFAULT_MODEL, GeminiProvider;
-var init_gemini_provider = __esm({
-  "src/core/llm/gemini-provider.ts"() {
-    "use strict";
-    init_dist();
-    init_logger();
-    DEFAULT_MODEL = "gemini-2.0-flash";
-    GeminiProvider = class {
-      client;
-      model;
-      /**
-       * Creates a new GeminiProvider instance.
-       *
-       * @param apiKey - Google API key for authentication
-       * @param model - Model name to use (default: gemini-2.0-flash)
-       * @throws {Error} If API key is not provided
-       */
-      constructor(apiKey, model = DEFAULT_MODEL) {
-        if (!apiKey) {
-          throw new Error("GeminiProvider requires an API key");
-        }
-        this.client = new GoogleGenerativeAI(apiKey);
-        this.model = model;
-      }
-      /**
-       * Completes a prompt using the Gemini API.
-       *
-       * @param prompt - The user prompt to complete
-       * @param options - Optional configuration for the completion
-       * @returns Promise resolving to the completion result with token usage
-       * @throws {Error} If the API call fails
-       */
-      async complete(prompt, options) {
-        const startTime = Date.now();
-        logInfo("[GeminiProvider] Starting completion", {
-          model: this.model,
-          promptLength: prompt.length,
-          maxTokens: options?.maxTokens
-        });
-        try {
-          const generationConfig = {};
-          if (options?.maxTokens) {
-            generationConfig.maxOutputTokens = options.maxTokens;
-          }
-          const modelParams = { model: this.model };
-          if (options?.systemPrompt) {
-            modelParams.systemInstruction = options.systemPrompt;
-          }
-          if (Object.keys(generationConfig).length > 0) {
-            modelParams.generationConfig = generationConfig;
-          }
-          logDebug("[GeminiProvider] Sending request", {
-            model: this.model,
-            hasSystemPrompt: !!options?.systemPrompt
-          });
-          const generativeModel = this.client.getGenerativeModel(modelParams);
-          const result = await generativeModel.generateContent(prompt);
-          const duration = Date.now() - startTime;
-          const parsed = this.parseResult(result);
-          logInfo("[GeminiProvider] Completion successful", {
-            duration,
-            inputTokens: parsed.usage.input_tokens,
-            outputTokens: parsed.usage.output_tokens,
-            responseLength: parsed.text.length
-          });
-          return parsed;
-        } catch (error) {
-          const duration = Date.now() - startTime;
-          logError("[GeminiProvider] Completion failed", error, {
-            model: this.model,
-            duration
-          });
-          throw new Error(
-            `Gemini API call failed: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      }
-      /**
-       * Parses a Gemini API response into an LLMResult.
-       *
-       * @param result - The raw API response from Gemini
-       * @returns Parsed LLM result with text and token usage
-       */
-      parseResult(result) {
-        const response = result.response;
-        const text = response.text() ?? "";
-        const usage = this.extractUsage(response);
-        return { text, usage };
-      }
-      /**
-       * Extracts token usage information from a Gemini API response.
-       *
-       * Note: Gemini API may not return cache-related token usage fields.
-       * These fields will be undefined in the returned TokenUsage object.
-       *
-       * @param response - The response object from Gemini
-       * @returns Token usage information
-       */
-      extractUsage(response) {
-        const usageMetadata = response.usageMetadata;
-        return {
-          input_tokens: usageMetadata?.promptTokenCount ?? 0,
-          output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
-          // Gemini doesn't provide cache-related token usage
-          cache_read_input_tokens: void 0,
-          cache_creation_input_tokens: void 0
-        };
-      }
-    };
-  }
-});
-
 // src/core/llm/zai-provider.ts
 var zai_provider_exports = {};
 __export(zai_provider_exports, {
   ZAIProvider: () => ZAIProvider
 });
-var DEFAULT_MODEL2, DEFAULT_BASE_URL2, ZAIProvider;
+var DEFAULT_MODEL, DEFAULT_BASE_URL2, ZAIProvider;
 var init_zai_provider = __esm({
   "src/core/llm/zai-provider.ts"() {
     "use strict";
     init_logger();
-    DEFAULT_MODEL2 = "glm-4.5-air";
+    init_ratelimiter();
+    DEFAULT_MODEL = "glm-4.5-air";
     DEFAULT_BASE_URL2 = "https://api.z.ai/api/coding/paas/v4";
     ZAIProvider = class {
       apiKey;
@@ -1718,7 +1602,7 @@ var init_zai_provider = __esm({
        * @param baseUrl - Base URL for API (default: https://api.z.ai/api/paas/v4)
        * @throws {Error} If API key is not provided
        */
-      constructor(apiKey, model = DEFAULT_MODEL2, baseUrl = DEFAULT_BASE_URL2) {
+      constructor(apiKey, model = DEFAULT_MODEL, baseUrl = DEFAULT_BASE_URL2) {
         if (!apiKey) {
           throw new Error("ZAIProvider requires an API key");
         }
@@ -1735,6 +1619,7 @@ var init_zai_provider = __esm({
        * @throws {Error} If the API call fails
        */
       async complete(prompt, options) {
+        await getLLMRateLimiter().acquire();
         const startTime = Date.now();
         logInfo("[ZAIProvider] Starting completion", {
           model: this.model,
@@ -1867,6 +1752,260 @@ var init_config = __esm({
     DEFAULT_MODELS = {
       gemini: "gemini-2.0-flash",
       zai: "glm-4.5-air"
+    };
+  }
+});
+
+// src/core/ratelimiter.ts
+function getEmbeddingRateLimiter() {
+  if (!embeddingLimiter) {
+    const config = loadConfig();
+    const ratelimitConfig = config?.ratelimit?.embedding;
+    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_EMBEDDING_RPS;
+    embeddingLimiter = new RateLimiter({
+      requestsPerSecond: rps,
+      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
+    });
+  }
+  return embeddingLimiter;
+}
+function getLLMRateLimiter() {
+  if (!llmLimiter) {
+    const config = loadConfig();
+    const ratelimitConfig = config?.ratelimit?.llm;
+    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_LLM_RPS;
+    llmLimiter = new RateLimiter({
+      requestsPerSecond: rps,
+      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
+    });
+  }
+  return llmLimiter;
+}
+var DEFAULT_EMBEDDING_RPS, DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter, llmLimiter;
+var init_ratelimiter = __esm({
+  "src/core/ratelimiter.ts"() {
+    "use strict";
+    init_config();
+    DEFAULT_EMBEDDING_RPS = 5;
+    DEFAULT_LLM_RPS = 2;
+    DEFAULT_BURST_MULTIPLIER = 2;
+    RateLimiter = class {
+      tokens;
+      maxTokens;
+      refillRate;
+      // tokens per millisecond
+      lastRefill;
+      queue = [];
+      /**
+       * Creates a new RateLimiter instance.
+       *
+       * @param config - Configuration options
+       */
+      constructor(config = {}) {
+        const rps = config.requestsPerSecond ?? 5;
+        this.maxTokens = config.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER;
+        this.tokens = this.maxTokens;
+        this.refillRate = rps / 1e3;
+        this.lastRefill = Date.now();
+      }
+      /**
+       * Refills tokens based on elapsed time.
+       * Called internally before token operations.
+       */
+      refill() {
+        const now = Date.now();
+        const elapsed = now - this.lastRefill;
+        if (elapsed > 0) {
+          const newTokens = elapsed * this.refillRate;
+          this.tokens = Math.min(this.maxTokens, this.tokens + newTokens);
+          this.lastRefill = now;
+        }
+      }
+      /**
+       * Acquires a token, waiting if necessary.
+       *
+       * @returns Promise that resolves when a token is available
+       */
+      acquire() {
+        this.refill();
+        if (this.tokens >= 1) {
+          this.tokens -= 1;
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          this.queue.push(resolve);
+          this.scheduleQueueProcessing();
+        });
+      }
+      /**
+       * Schedules processing of the queue if not already scheduled.
+       */
+      scheduleQueueProcessing() {
+        const tokensNeeded = 1 - this.tokens;
+        const waitMs = Math.ceil(tokensNeeded / this.refillRate);
+        setTimeout(() => {
+          this.processQueue();
+        }, waitMs);
+      }
+      /**
+       * Tries to acquire a token without waiting.
+       *
+       * @returns true if token was acquired, false if rate limited
+       */
+      tryAcquire() {
+        this.refill();
+        if (this.tokens >= 1) {
+          this.tokens -= 1;
+          return true;
+        }
+        return false;
+      }
+      /**
+       * Gets the current number of available tokens.
+       *
+       * @returns Number of tokens available (may be fractional)
+       */
+      getAvailableTokens() {
+        this.refill();
+        return Math.floor(this.tokens);
+      }
+      /**
+       * Processes queued requests if tokens are available.
+       */
+      processQueue() {
+        this.refill();
+        while (this.queue.length > 0 && this.tokens >= 1) {
+          const next = this.queue.shift();
+          if (next) {
+            this.tokens -= 1;
+            next();
+          }
+        }
+        if (this.queue.length > 0) {
+          this.scheduleQueueProcessing();
+        }
+      }
+    };
+    embeddingLimiter = null;
+    llmLimiter = null;
+  }
+});
+
+// src/core/llm/gemini-provider.ts
+var gemini_provider_exports = {};
+__export(gemini_provider_exports, {
+  GeminiProvider: () => GeminiProvider
+});
+var DEFAULT_MODEL2, GeminiProvider;
+var init_gemini_provider = __esm({
+  "src/core/llm/gemini-provider.ts"() {
+    "use strict";
+    init_dist();
+    init_logger();
+    init_ratelimiter();
+    DEFAULT_MODEL2 = "gemini-2.0-flash";
+    GeminiProvider = class {
+      client;
+      model;
+      /**
+       * Creates a new GeminiProvider instance.
+       *
+       * @param apiKey - Google API key for authentication
+       * @param model - Model name to use (default: gemini-2.0-flash)
+       * @throws {Error} If API key is not provided
+       */
+      constructor(apiKey, model = DEFAULT_MODEL2) {
+        if (!apiKey) {
+          throw new Error("GeminiProvider requires an API key");
+        }
+        this.client = new GoogleGenerativeAI(apiKey);
+        this.model = model;
+      }
+      /**
+       * Completes a prompt using the Gemini API.
+       *
+       * @param prompt - The user prompt to complete
+       * @param options - Optional configuration for the completion
+       * @returns Promise resolving to the completion result with token usage
+       * @throws {Error} If the API call fails
+       */
+      async complete(prompt, options) {
+        await getLLMRateLimiter().acquire();
+        const startTime = Date.now();
+        logInfo("[GeminiProvider] Starting completion", {
+          model: this.model,
+          promptLength: prompt.length,
+          maxTokens: options?.maxTokens
+        });
+        try {
+          const generationConfig = {};
+          if (options?.maxTokens) {
+            generationConfig.maxOutputTokens = options.maxTokens;
+          }
+          const modelParams = { model: this.model };
+          if (options?.systemPrompt) {
+            modelParams.systemInstruction = options.systemPrompt;
+          }
+          if (Object.keys(generationConfig).length > 0) {
+            modelParams.generationConfig = generationConfig;
+          }
+          logDebug("[GeminiProvider] Sending request", {
+            model: this.model,
+            hasSystemPrompt: !!options?.systemPrompt
+          });
+          const generativeModel = this.client.getGenerativeModel(modelParams);
+          const result = await generativeModel.generateContent(prompt);
+          const duration = Date.now() - startTime;
+          const parsed = this.parseResult(result);
+          logInfo("[GeminiProvider] Completion successful", {
+            duration,
+            inputTokens: parsed.usage.input_tokens,
+            outputTokens: parsed.usage.output_tokens,
+            responseLength: parsed.text.length
+          });
+          return parsed;
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          logError("[GeminiProvider] Completion failed", error, {
+            model: this.model,
+            duration
+          });
+          throw new Error(
+            `Gemini API call failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+      /**
+       * Parses a Gemini API response into an LLMResult.
+       *
+       * @param result - The raw API response from Gemini
+       * @returns Parsed LLM result with text and token usage
+       */
+      parseResult(result) {
+        const response = result.response;
+        const text = response.text() ?? "";
+        const usage = this.extractUsage(response);
+        return { text, usage };
+      }
+      /**
+       * Extracts token usage information from a Gemini API response.
+       *
+       * Note: Gemini API may not return cache-related token usage fields.
+       * These fields will be undefined in the returned TokenUsage object.
+       *
+       * @param response - The response object from Gemini
+       * @returns Token usage information
+       */
+      extractUsage(response) {
+        const usageMetadata = response.usageMetadata;
+        return {
+          input_tokens: usageMetadata?.promptTokenCount ?? 0,
+          output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
+          // Gemini doesn't provide cache-related token usage
+          cache_read_input_tokens: void 0,
+          cache_creation_input_tokens: void 0
+        };
+      }
     };
   }
 });
@@ -2023,6 +2162,7 @@ async function initEmbeddings() {
   }
 }
 async function generateEmbedding(text) {
+  await getEmbeddingRateLimiter().acquire();
   if (!embeddingPipeline) {
     await initEmbeddings();
   }
@@ -2038,6 +2178,7 @@ var embeddingPipeline;
 var init_embeddings = __esm({
   "src/core/embeddings.ts"() {
     "use strict";
+    init_ratelimiter();
     embeddingPipeline = null;
   }
 });

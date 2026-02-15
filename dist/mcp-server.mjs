@@ -5,6 +5,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -6786,6 +6789,195 @@ var require_dist = __commonJS({
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
+  }
+});
+
+// src/core/llm/config.ts
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+function loadConfig() {
+  const configDir = join(process.env.HOME ?? "", ".config", "memmem");
+  const configPath = join(configDir, "config.json");
+  if (!existsSync(configPath)) {
+    return null;
+  }
+  try {
+    const configContent = readFileSync(configPath, "utf-8");
+    const config2 = JSON.parse(configContent);
+    if (!config2.provider || !config2.apiKey) {
+      console.warn("Invalid config: missing provider or apiKey field");
+      return null;
+    }
+    if (config2.provider !== "gemini" && config2.provider !== "zai") {
+      console.warn(`Invalid config: unknown provider "${config2.provider}"`);
+      return null;
+    }
+    return config2;
+  } catch (error2) {
+    console.warn(
+      `Failed to load config from ${configPath}: ${error2 instanceof Error ? error2.message : String(error2)}`
+    );
+    return null;
+  }
+}
+var init_config = __esm({
+  "src/core/llm/config.ts"() {
+    "use strict";
+  }
+});
+
+// src/core/ratelimiter.ts
+function getEmbeddingRateLimiter() {
+  if (!embeddingLimiter) {
+    const config2 = loadConfig();
+    const ratelimitConfig = config2?.ratelimit?.embedding;
+    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_EMBEDDING_RPS;
+    embeddingLimiter = new RateLimiter({
+      requestsPerSecond: rps,
+      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
+    });
+  }
+  return embeddingLimiter;
+}
+var DEFAULT_EMBEDDING_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter;
+var init_ratelimiter = __esm({
+  "src/core/ratelimiter.ts"() {
+    "use strict";
+    init_config();
+    DEFAULT_EMBEDDING_RPS = 5;
+    DEFAULT_BURST_MULTIPLIER = 2;
+    RateLimiter = class {
+      tokens;
+      maxTokens;
+      refillRate;
+      // tokens per millisecond
+      lastRefill;
+      queue = [];
+      /**
+       * Creates a new RateLimiter instance.
+       *
+       * @param config - Configuration options
+       */
+      constructor(config2 = {}) {
+        const rps = config2.requestsPerSecond ?? 5;
+        this.maxTokens = config2.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER;
+        this.tokens = this.maxTokens;
+        this.refillRate = rps / 1e3;
+        this.lastRefill = Date.now();
+      }
+      /**
+       * Refills tokens based on elapsed time.
+       * Called internally before token operations.
+       */
+      refill() {
+        const now = Date.now();
+        const elapsed = now - this.lastRefill;
+        if (elapsed > 0) {
+          const newTokens = elapsed * this.refillRate;
+          this.tokens = Math.min(this.maxTokens, this.tokens + newTokens);
+          this.lastRefill = now;
+        }
+      }
+      /**
+       * Acquires a token, waiting if necessary.
+       *
+       * @returns Promise that resolves when a token is available
+       */
+      acquire() {
+        this.refill();
+        if (this.tokens >= 1) {
+          this.tokens -= 1;
+          return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+          this.queue.push(resolve);
+          this.scheduleQueueProcessing();
+        });
+      }
+      /**
+       * Schedules processing of the queue if not already scheduled.
+       */
+      scheduleQueueProcessing() {
+        const tokensNeeded = 1 - this.tokens;
+        const waitMs = Math.ceil(tokensNeeded / this.refillRate);
+        setTimeout(() => {
+          this.processQueue();
+        }, waitMs);
+      }
+      /**
+       * Tries to acquire a token without waiting.
+       *
+       * @returns true if token was acquired, false if rate limited
+       */
+      tryAcquire() {
+        this.refill();
+        if (this.tokens >= 1) {
+          this.tokens -= 1;
+          return true;
+        }
+        return false;
+      }
+      /**
+       * Gets the current number of available tokens.
+       *
+       * @returns Number of tokens available (may be fractional)
+       */
+      getAvailableTokens() {
+        this.refill();
+        return Math.floor(this.tokens);
+      }
+      /**
+       * Processes queued requests if tokens are available.
+       */
+      processQueue() {
+        this.refill();
+        while (this.queue.length > 0 && this.tokens >= 1) {
+          const next = this.queue.shift();
+          if (next) {
+            this.tokens -= 1;
+            next();
+          }
+        }
+        if (this.queue.length > 0) {
+          this.scheduleQueueProcessing();
+        }
+      }
+    };
+    embeddingLimiter = null;
+  }
+});
+
+// src/core/paths.ts
+import os from "os";
+import path from "path";
+import fs from "fs";
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getSuperpowersDir() {
+  let dir;
+  if (process.env.MEMMEM_CONFIG_DIR) {
+    dir = process.env.MEMMEM_CONFIG_DIR;
+  } else {
+    dir = path.join(os.homedir(), ".config", "memmem");
+  }
+  return ensureDir(dir);
+}
+function getIndexDir() {
+  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
+}
+function getDbPath() {
+  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
+    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
+  }
+  return path.join(getIndexDir(), "conversations.db");
+}
+var init_paths = __esm({
+  "src/core/paths.ts"() {
+    "use strict";
   }
 });
 
@@ -17747,6 +17939,7 @@ var StdioServerTransport = class {
 };
 
 // src/core/embeddings.ts
+init_ratelimiter();
 import { pipeline, env } from "@huggingface/transformers";
 var embeddingPipeline = null;
 async function initEmbeddings() {
@@ -17762,6 +17955,7 @@ async function initEmbeddings() {
   }
 }
 async function generateEmbedding(text) {
+  await getEmbeddingRateLimiter().acquire();
   if (!embeddingPipeline) {
     await initEmbeddings();
   }
@@ -17858,41 +18052,11 @@ async function search(query, options) {
 }
 
 // src/core/db.v3.ts
+init_paths();
 import Database from "better-sqlite3";
 import path2 from "path";
 import fs2 from "fs";
 import * as sqliteVec from "sqlite-vec";
-
-// src/core/paths.ts
-import os from "os";
-import path from "path";
-import fs from "fs";
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function getSuperpowersDir() {
-  let dir;
-  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
-    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
-  } else {
-    dir = path.join(os.homedir(), ".config", "memmem");
-  }
-  return ensureDir(dir);
-}
-function getIndexDir() {
-  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
-}
-function getDbPath() {
-  if (process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH) {
-    return process.env.CONVERSATION_MEMORY_DB_PATH || process.env.TEST_DB_PATH;
-  }
-  return path.join(getIndexDir(), "conversations.db");
-}
-
-// src/core/db.v3.ts
 function openDatabase() {
   return createDatabase(false);
 }
