@@ -37,7 +37,8 @@ describe('Inject CLI', () => {
   let originalEnv: NodeJS.ProcessEnv;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let processExitSpy: any;
   let consoleLogs: string[];
   let consoleErrors: string[];
   let exitCode: number | null;
@@ -71,11 +72,13 @@ describe('Inject CLI', () => {
       consoleErrors.push(args.map(String).join(' '));
     });
 
-    // Mock process.exit
-    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
-      exitCode = code ?? 1;
+    // Mock process.exit - use any to avoid vitest mock type incompatibility
+    const originalExit = process.exit;
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: string | number | null) => {
+      exitCode = typeof code === 'number' ? code : 1;
       throw new Error(`process.exit(${code})`);
-    });
+    }) as typeof process.exit);
+    process.exit = originalExit;
 
     // Clear all mocks
     vi.clearAllMocks();
