@@ -164,7 +164,7 @@ describe('Observe CLI', () => {
       process.env.CLAUDE_SESSION_ID = 'test-session-123';
       process.env.CLAUDE_PROJECT = 'test-project';
 
-      const mockConfig = { apiKey: 'test-key', model: 'gemini-2.0-flash' };
+      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
       const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
 
       (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
@@ -180,7 +180,7 @@ describe('Observe CLI', () => {
         throw new Error('No config');
       }
 
-      const provider = createProvider(config);
+      const provider = await createProvider(config);
       await handleStop(db, { provider, sessionId, project });
 
       try {
@@ -216,7 +216,7 @@ describe('Observe CLI', () => {
     });
 
     test('should close database after summarization', async () => {
-      const mockConfig = { apiKey: 'test-key', model: 'gemini-2.0-flash' };
+      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
       const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
 
       (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
@@ -293,7 +293,7 @@ describe('Observe CLI', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const error = new Error('Test error');
-      consoleErrorSpy(`[memmem] Error in observe: ${error.message}`);
+      console.error(`[memmem] Error in observe: ${error.message}`);
 
       expect(consoleErrorSpy).toHaveBeenCalledWith('[memmem] Error in observe: Test error');
 
@@ -309,7 +309,7 @@ describe('Observe CLI', () => {
         JSON.parse(invalidJson);
       } catch (error) {
         if (error instanceof Error) {
-          consoleErrorSpy(`[memmem] Error in observe: ${error.message}`);
+          console.error(`[memmem] Error in observe: ${error.message}`);
           expect(error instanceof Error).toBe(true);
         }
       }
@@ -359,20 +359,20 @@ describe('Observe CLI', () => {
     });
 
     test('should load LLM config when present', () => {
-      const mockConfig = { apiKey: 'test-key', model: 'gemini-2.0-flash' };
+      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
       (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
 
       const config = loadConfig();
       expect(config).toEqual(mockConfig);
     });
 
-    test('should create provider from config', () => {
-      const mockConfig = { apiKey: 'test-key', model: 'gemini-2.0-flash' };
+    test('should create provider from config', async () => {
+      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
       const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
 
-      (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(mockProvider);
+      (createProvider as ReturnType<typeof vi.fn>).mockResolvedValue(mockProvider);
 
-      const provider = createProvider(mockConfig);
+      const provider = await createProvider(mockConfig);
       expect(provider).toBe(mockProvider);
     });
   });

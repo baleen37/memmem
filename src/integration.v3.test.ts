@@ -278,7 +278,7 @@ describe('V3 Integration Tests', () => {
       // Now start a new session with small token budget
       const config: SessionStartConfig = {
         maxObservations: 10,
-        maxTokens: 50, // Very small budget
+        maxTokens: 100, // Small budget but enough for short observation
         recencyDays: 7,
         projectOnly: true,
       };
