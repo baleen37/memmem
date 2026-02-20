@@ -568,3 +568,145 @@ describe('formatToolResultContent()', () => {
     expect(result).toContain('"foo"');
   });
 });
+
+describe('findToolResult()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('finds tool result by tool_use_id', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      }),
+      createMsg({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Some text' },
+            { type: 'tool_result', tool_use_id: 'tool-123', content: 'File contents' } as any
+          ]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).not.toBeNull();
+    expect((result as any).content).toBe('File contents');
+  });
+
+  test('returns null when tool result not found', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).toBeNull();
+  });
+
+  test('only searches within 6 messages ahead', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      }),
+      ...Array(6).fill(null).map((_, i) =>
+        createMsg({ uuid: `msg-${i}`, type: 'user', message: { role: 'user', content: `msg ${i}` } })
+      ),
+      createMsg({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tool-123', content: 'Too far' } as any]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('formatUserMessage()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('formats string content', () => {
+    const msg = createMsg({ message: { role: 'user', content: 'Hello world' } });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toBe('Hello world\n\n');
+  });
+
+  test('formats text blocks from array content', () => {
+    const msg = createMsg({
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'First part' },
+          { type: 'text', text: 'Second part' }
+        ]
+      }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('First part');
+    expect(result).toContain('Second part');
+  });
+
+  test('formats toolUseResult string', () => {
+    const msg = createMsg({
+      toolUseResult: 'Tool result here',
+      message: { role: 'user', content: '' }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('**Tool Result:**');
+    expect(result).toContain('Tool result here');
+  });
+
+  test('formats toolUseResult array', () => {
+    const msg = createMsg({
+      toolUseResult: [{ type: 'text', text: 'Result 1' }, { type: 'text', text: 'Result 2' }],
+      message: { role: 'user', content: '' }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('Result 1');
+    expect(result).toContain('Result 2');
+  });
+});

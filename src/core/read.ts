@@ -185,6 +185,75 @@ export function formatToolResultContent(content: string | any[]): string {
   return '';
 }
 
+interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string | any[];
+}
+
+/**
+ * Find tool result in messages following a tool use.
+ * Searches up to 6 messages ahead for matching tool_use_id.
+ *
+ * @param messages - All conversation messages
+ * @param toolUseIndex - Index of the message containing tool use
+ * @param toolUseId - ID of the tool use to match
+ * @returns Tool result block or null if not found
+ */
+export function findToolResult(
+  messages: ConversationMessage[],
+  toolUseIndex: number,
+  toolUseId: string
+): ToolResultBlock | null {
+  for (let j = toolUseIndex + 1; j < Math.min(toolUseIndex + 6, messages.length); j++) {
+    const laterMsg = messages[j];
+    if (laterMsg.type === 'user' && Array.isArray(laterMsg.message.content)) {
+      for (const resultBlock of laterMsg.message.content) {
+        if (resultBlock.type === 'tool_result' && (resultBlock as any).tool_use_id === toolUseId) {
+          return resultBlock as ToolResultBlock;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Format user message content.
+ *
+ * @param msg - User message to format
+ * @returns Markdown formatted message content
+ */
+export function formatUserMessage(msg: ConversationMessage): string {
+  let output = '';
+
+  // Handle tool results
+  if (msg.toolUseResult) {
+    output += '**Tool Result:**\n\n';
+    if (typeof msg.toolUseResult === 'string') {
+      output += `${msg.toolUseResult}\n\n`;
+    } else if (Array.isArray(msg.toolUseResult)) {
+      for (const result of msg.toolUseResult) {
+        output += `${(result as any).text || String(result)}\n\n`;
+      }
+    }
+    return output;
+  }
+
+  // Handle regular content
+  if (typeof msg.message.content === 'string') {
+    output += `${msg.message.content}\n\n`;
+  } else if (Array.isArray(msg.message.content)) {
+    for (const block of msg.message.content) {
+      if (block.type === 'text' && block.text) {
+        output += `${block.text}\n\n`;
+      }
+    }
+  }
+
+  return output;
+}
+
 /**
  * Format JSONL conversation as markdown.
  *
