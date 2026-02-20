@@ -1,24 +1,24 @@
 /**
- * V3 Observations CRUD Operations
+ * Observations CRUD Operations
  *
  * Simplified observation system with just title + content.
- * Uses db.v3.ts for database operations.
+ * Uses db.ts for database operations.
  */
 
 import Database from 'better-sqlite3';
 import {
-  ObservationV3,
-  ObservationResultV3,
-  insertObservationV3,
-  getObservationV3,
-  searchObservationsV3
-} from './db.v3.js';
+  Observation,
+  ObservationResult,
+  insertObservation,
+  getObservation,
+  searchObservations
+} from './db.js';
 import { generateEmbedding, initEmbeddings } from './embeddings.js';
 
 /**
  * Simplified Observation type for public API
  */
-export interface Observation {
+export interface ObservationData {
   id: number;
   title: string;
   content: string;
@@ -49,7 +49,7 @@ export async function create(
   const now = Date.now();
   const obsTimestamp = timestamp ?? now;
 
-  const observation: ObservationV3 = {
+  const observation: Observation = {
     title,
     content,
     project,
@@ -66,7 +66,7 @@ export async function create(
   const embeddingText = `${title}\n${content}`;
   const embedding = await generateEmbedding(embeddingText);
 
-  return insertObservationV3(db, observation, embedding);
+  return insertObservation(db, observation, embedding);
 }
 
 /**
@@ -79,8 +79,8 @@ export async function create(
 export async function findById(
   db: Database.Database,
   id: number
-): Promise<Observation | null> {
-  const result = getObservationV3(db, id);
+): Promise<ObservationData | null> {
+  const result = getObservation(db, id);
 
   if (!result) {
     return null;
@@ -106,7 +106,7 @@ export async function findById(
 export async function findByIds(
   db: Database.Database,
   ids: number[]
-): Promise<Observation[]> {
+): Promise<ObservationData[]> {
   if (ids.length === 0) {
     return [];
   }
@@ -119,7 +119,7 @@ export async function findByIds(
     ORDER BY timestamp DESC
   `);
 
-  const results = stmt.all(...ids) as ObservationResultV3[];
+  const results = stmt.all(...ids) as ObservationResult[];
 
   return results.map(r => ({
     id: r.id,

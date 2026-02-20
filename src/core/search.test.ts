@@ -1,14 +1,11 @@
 /**
- * Tests for V3 observation-only search
- *
- * Tests the simplified search functionality using only observations with vector similarity.
- * No exchanges, vec_exchanges, multi-concept search, or FTS.
+ * Tests for observation search
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3, insertObservationV3 } from './db.v3.js';
-import { search } from './search.v3.js';
+import { initDatabase, insertObservation } from './db.js';
+import { search } from './search.js';
 
 // Global mock factory that can be controlled per test
 let mockGenerateEmbedding: (() => Promise<number[]>) | null = null;
@@ -19,13 +16,13 @@ vi.mock('./embeddings.js', () => ({
   generateEmbedding: vi.fn(() => Promise.resolve(mockGenerateEmbedding?.() ?? []))
 }));
 
-describe('search.v3 - observation-only search', () => {
+describe('search - observation search', () => {
   let db: Database.Database;
 
   beforeEach(() => {
     // Use in-memory database for testing
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
-    db = initDatabaseV3();
+    db = initDatabase();
   });
 
   afterEach(() => {
@@ -50,7 +47,7 @@ describe('search.v3 - observation-only search', () => {
     },
     embedding?: number[]
   ): number {
-    return insertObservationV3(db, {
+    return insertObservation(db, {
       title: observation.title,
       content: observation.content,
       project: observation.project,

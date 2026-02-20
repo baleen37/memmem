@@ -10,15 +10,15 @@
  *    - Previous batch's last 3 observations (context, avoids duplication)
  *    - Extraction prompt: produce title + content for each meaningful observation
  *    - LLM may return empty array for low-value batches
- * 5. Stores observations with embeddings using observations.v3.ts
+ * 5. Stores observations with embeddings using observations.ts
  * 6. Runs async (non-blocking)
  */
 
 import Database from 'better-sqlite3';
 import type { LLMProvider, CompressedEvent, PreviousObservation } from '../core/llm/index.js';
 import { extractObservationsFromBatch } from '../core/llm/index.js';
-import { create as createObservation } from '../core/observations.v3.js';
-import { getAllPendingEventsV3, type PendingEventV3 } from '../core/db.v3.js';
+import { create as createObservation } from '../core/observations.js';
+import { getAllPendingEvents, type PendingEvent } from '../core/db.js';
 
 /**
  * Default batch size for event processing.
@@ -66,7 +66,7 @@ export async function handleStop(
   const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE } = options;
 
   // Step 1: Collect all pending_events for this session
-  const allEvents: Array<PendingEventV3 & { id: number }> = getAllPendingEventsV3(db, sessionId);
+  const allEvents: Array<PendingEvent & { id: number }> = getAllPendingEvents(db, sessionId);
 
   // Step 2: Skip if < 3 events (too short to be useful)
   if (allEvents.length < MIN_EVENT_THRESHOLD) {
@@ -83,7 +83,7 @@ export async function handleStop(
   for (const batch of batches) {
     try {
       // Convert to CompressedEvent format
-      const compressedEvents: CompressedEvent[] = batch.map((event: PendingEventV3 & { id: number }) => ({
+      const compressedEvents: CompressedEvent[] = batch.map((event: PendingEvent & { id: number }) => ({
         toolName: event.toolName,
         compressed: event.compressed,
         timestamp: event.timestamp,

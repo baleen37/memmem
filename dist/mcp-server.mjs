@@ -17973,7 +17973,7 @@ async function generateEmbedding(text) {
   return Array.from(output.data);
 }
 
-// src/core/search.v3.ts
+// src/core/search.ts
 function validateISODate(dateStr, paramName) {
   const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!isoDateRegex.test(dateStr)) {
@@ -18056,7 +18056,7 @@ async function search(query, options) {
   return results;
 }
 
-// src/core/db.v3.ts
+// src/core/db.ts
 init_paths();
 import Database from "better-sqlite3";
 import path2 from "path";
@@ -18072,7 +18072,7 @@ function createDatabase(wipe) {
     fs2.mkdirSync(dbDir, { recursive: true });
   }
   if (wipe && dbPath !== ":memory:" && fs2.existsSync(dbPath)) {
-    console.log("Deleting old database file for V3 clean slate...");
+    console.log("Deleting old database file for clean slate...");
     fs2.unlinkSync(dbPath);
   }
   const db = new Database(dbPath);
@@ -18080,15 +18080,6 @@ function createDatabase(wipe) {
   db.pragma("journal_mode = WAL");
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   const tableNames = new Set(tables.map((t) => t.name));
-  if (!wipe && tableNames.size > 0) {
-    const v3Tables = ["pending_events", "observations", "vec_observations"];
-    const hasV3Tables = v3Tables.every((t) => tableNames.has(t));
-    if (!hasV3Tables && tableNames.has("exchanges")) {
-      throw new Error(
-        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/memmem/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
-      );
-    }
-  }
   if (!tableNames.has("pending_events")) {
     db.exec(`
       CREATE TABLE pending_events (
@@ -18132,7 +18123,7 @@ function createDatabase(wipe) {
   return db;
 }
 
-// src/core/observations.v3.ts
+// src/core/observations.ts
 async function findByIds(db, ids) {
   if (ids.length === 0) {
     return [];
@@ -18157,39 +18148,29 @@ async function findByIds(db, ids) {
 
 // src/core/read.ts
 import * as fs3 from "fs";
-function readConversation(path3, startLine, endLine) {
-  if (!fs3.existsSync(path3)) {
-    return null;
+function formatTokenUsage(usage) {
+  let output = `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
+  if (usage.cache_read_input_tokens) {
+    output += ` | cache read: ${usage.cache_read_input_tokens.toLocaleString()}`;
   }
-  const jsonlContent = fs3.readFileSync(path3, "utf-8");
-  return formatConversationAsMarkdown(jsonlContent, startLine, endLine);
+  if (usage.cache_creation_input_tokens) {
+    output += ` | cache create: ${usage.cache_creation_input_tokens.toLocaleString()}`;
+  }
+  output += ` | out: ${(usage.output_tokens || 0).toLocaleString()}_
+
+`;
+  return output;
 }
-function formatConversationAsMarkdown(jsonl, startLine, endLine) {
+function parseJsonlMessages(jsonl, startLine, endLine) {
   const allLines = jsonl.trim().split("\n").filter((line) => line.trim());
   const lines = startLine !== void 0 || endLine !== void 0 ? allLines.slice(
     startLine !== void 0 ? startLine - 1 : 0,
     endLine !== void 0 ? endLine : void 0
   ) : allLines;
-  const allMessages = lines.map((line) => JSON.parse(line));
-  const messages = allMessages.filter((msg) => {
-    if (msg.type !== "user" && msg.type !== "assistant") return false;
-    if (!msg.timestamp) return false;
-    if (!msg.message || !msg.message.content) {
-      if (msg.type === "assistant" && msg.message?.usage) return true;
-      return false;
-    }
-    if (Array.isArray(msg.message.content) && msg.message.content.length === 0) {
-      if (msg.type === "assistant" && msg.message?.usage) return true;
-      return false;
-    }
-    return true;
-  });
-  if (messages.length === 0) {
-    return "";
-  }
-  const firstMessage = messages[0];
-  let output = "# Conversation\n\n";
-  output += "## Metadata\n\n";
+  return lines.map((line) => JSON.parse(line));
+}
+function formatMetadata(firstMessage) {
+  let output = "## Metadata\n\n";
   if (firstMessage.sessionId) {
     output += `**Session ID:** ${firstMessage.sessionId}
 
@@ -18211,6 +18192,134 @@ function formatConversationAsMarkdown(jsonl, startLine, endLine) {
 `;
   }
   output += "---\n\n";
+  return output;
+}
+function readConversation(path3, startLine, endLine) {
+  if (!fs3.existsSync(path3)) {
+    return null;
+  }
+  const jsonlContent = fs3.readFileSync(path3, "utf-8");
+  return formatConversationAsMarkdown(jsonlContent, startLine, endLine);
+}
+function filterValidMessages(messages) {
+  return messages.filter((msg) => {
+    if (msg.type !== "user" && msg.type !== "assistant") return false;
+    if (!msg.timestamp) return false;
+    if (!msg.message || !msg.message.content) {
+      if (msg.type === "assistant" && msg.message?.usage) return true;
+      return false;
+    }
+    if (Array.isArray(msg.message.content) && msg.message.content.length === 0) {
+      if (msg.type === "assistant" && msg.message?.usage) return true;
+      return false;
+    }
+    return true;
+  });
+}
+function formatSidechainStart() {
+  return "\n---\n**\u{1F500} SIDECHAIN START**\n---\n\n";
+}
+function formatSidechainEnd() {
+  return "\n---\n**\u{1F500} SIDECHAIN END**\n---\n\n";
+}
+function getRoleLabel(type, isSidechain) {
+  if (isSidechain) {
+    return type === "user" ? "Agent" : "Subagent";
+  }
+  return type === "user" ? "User" : "Agent";
+}
+function formatToolInput(input) {
+  let output = "";
+  if (input && typeof input === "object") {
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === "string" && value.includes("\n")) {
+        output += `- **${key}:**
+\`\`\`
+${value}
+\`\`\`
+`;
+      } else if (typeof value === "string") {
+        output += `- **${key}:** ${value}
+`;
+      } else {
+        output += `- **${key}:**
+\`\`\`json
+${JSON.stringify(value, null, 2)}
+\`\`\`
+`;
+      }
+    }
+    output += "\n";
+  }
+  return output;
+}
+function formatToolResultContent(content) {
+  if (typeof content === "string") {
+    if (content.includes("\n") || content.length > 100) {
+      return "```\n" + content + "\n```\n\n";
+    }
+    return `${content}
+
+`;
+  }
+  if (Array.isArray(content)) {
+    return "```json\n" + JSON.stringify(content, null, 2) + "\n```\n\n";
+  }
+  return "";
+}
+function findToolResult(messages, toolUseIndex, toolUseId) {
+  for (let j = toolUseIndex + 1; j < Math.min(toolUseIndex + 6, messages.length); j++) {
+    const laterMsg = messages[j];
+    if (laterMsg.type === "user" && Array.isArray(laterMsg.message.content)) {
+      for (const resultBlock of laterMsg.message.content) {
+        if (resultBlock.type === "tool_result" && resultBlock.tool_use_id === toolUseId) {
+          return resultBlock;
+        }
+      }
+    }
+  }
+  return null;
+}
+function formatUserMessage(msg) {
+  let output = "";
+  if (msg.toolUseResult) {
+    output += "**Tool Result:**\n\n";
+    if (typeof msg.toolUseResult === "string") {
+      output += `${msg.toolUseResult}
+
+`;
+    } else if (Array.isArray(msg.toolUseResult)) {
+      for (const result of msg.toolUseResult) {
+        output += `${result.text || String(result)}
+
+`;
+      }
+    }
+    return output;
+  }
+  if (typeof msg.message.content === "string") {
+    output += `${msg.message.content}
+
+`;
+  } else if (Array.isArray(msg.message.content)) {
+    for (const block of msg.message.content) {
+      if (block.type === "text" && block.text) {
+        output += `${block.text}
+
+`;
+      }
+    }
+  }
+  return output;
+}
+function formatConversationAsMarkdown(jsonl, startLine, endLine) {
+  const allMessages = parseJsonlMessages(jsonl, startLine, endLine);
+  const messages = filterValidMessages(allMessages);
+  if (messages.length === 0) {
+    return "";
+  }
+  let output = "# Conversation\n\n";
+  output += formatMetadata(messages[0]);
   output += "## Messages\n\n";
   let inSidechain = false;
   for (let i = 0; i < messages.length; i++) {
@@ -18224,144 +18333,58 @@ function formatConversationAsMarkdown(jsonl, startLine, endLine) {
       }
     }
     if (msg.isSidechain && !inSidechain) {
-      output += "\n---\n";
-      output += "**\u{1F500} SIDECHAIN START**\n";
-      output += "---\n\n";
+      output += formatSidechainStart();
       inSidechain = true;
     } else if (!msg.isSidechain && inSidechain) {
-      output += "\n---\n";
-      output += "**\u{1F500} SIDECHAIN END**\n";
-      output += "---\n\n";
+      output += formatSidechainEnd();
       inSidechain = false;
     }
-    let roleLabel;
-    if (msg.isSidechain) {
-      roleLabel = msg.type === "user" ? "Agent" : "Subagent";
-    } else {
-      roleLabel = msg.type === "user" ? "User" : "Agent";
-    }
+    const roleLabel = getRoleLabel(msg.type, msg.isSidechain);
     output += `### **${roleLabel}** (${timestamp}) {#${messageId}}
 
 `;
     if (msg.type === "user") {
-      if (msg.toolUseResult) {
-        output += "**Tool Result:**\n\n";
-        if (typeof msg.toolUseResult === "string") {
-          output += `${msg.toolUseResult}
-
-`;
-        } else if (Array.isArray(msg.toolUseResult)) {
-          for (const result of msg.toolUseResult) {
-            output += `${result.text || String(result)}
-
-`;
-          }
-        }
-      } else if (typeof msg.message.content === "string") {
-        output += `${msg.message.content}
-
-`;
-      } else if (Array.isArray(msg.message.content)) {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text) {
-            output += `${block.text}
-
-`;
-          }
-        }
-      }
+      output += formatUserMessage(msg);
     } else if (msg.type === "assistant") {
-      const content = msg.message.content;
-      if (typeof content === "string") {
-        output += `${content}
-
-`;
-      } else if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === "text" && block.text) {
-            output += `${block.text}
-
-`;
-          } else if (block.type === "tool_use") {
-            output += `**Tool Use:** \`${block.name}\`
-
-`;
-            const input = block.input;
-            if (input && typeof input === "object") {
-              for (const [key, value] of Object.entries(input)) {
-                if (typeof value === "string" && value.includes("\n")) {
-                  output += `- **${key}:**
-\`\`\`
-${value}
-\`\`\`
-`;
-                } else if (typeof value === "string") {
-                  output += `- **${key}:** ${value}
-`;
-                } else {
-                  output += `- **${key}:**
-\`\`\`json
-${JSON.stringify(value, null, 2)}
-\`\`\`
-`;
-                }
-              }
-              output += "\n";
-            }
-            const toolUseId = block.id;
-            if (toolUseId) {
-              let foundResult = false;
-              for (let j = i + 1; j < Math.min(i + 6, messages.length) && !foundResult; j++) {
-                const laterMsg = messages[j];
-                if (laterMsg.type === "user" && Array.isArray(laterMsg.message.content)) {
-                  for (const resultBlock of laterMsg.message.content) {
-                    if (resultBlock.type === "tool_result" && resultBlock.tool_use_id === toolUseId) {
-                      const content2 = resultBlock.content;
-                      output += "**Result:**\n";
-                      if (typeof content2 === "string") {
-                        if (content2.includes("\n") || content2.length > 100) {
-                          output += "```\n";
-                          output += content2;
-                          output += "\n```\n\n";
-                        } else {
-                          output += `${content2}
-
-`;
-                        }
-                      } else if (Array.isArray(content2)) {
-                        output += "```json\n";
-                        output += JSON.stringify(content2, null, 2);
-                        output += "\n```\n\n";
-                      }
-                      foundResult = true;
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if (msg.message.usage) {
-        const usage = msg.message.usage;
-        output += `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
-        if (usage.cache_read_input_tokens) {
-          output += ` | cache read: ${usage.cache_read_input_tokens.toLocaleString()}`;
-        }
-        if (usage.cache_creation_input_tokens) {
-          output += ` | cache create: ${usage.cache_creation_input_tokens.toLocaleString()}`;
-        }
-        output += ` | out: ${(usage.output_tokens || 0).toLocaleString()}_
-
-`;
-      }
+      output += formatAssistantMessage(messages, i, msg);
     }
   }
   if (inSidechain) {
-    output += "\n---\n";
-    output += "**\u{1F500} SIDECHAIN END**\n";
-    output += "---\n\n";
+    output += formatSidechainEnd();
+  }
+  return output;
+}
+function formatAssistantMessage(messages, index, msg) {
+  let output = "";
+  const content = msg.message.content;
+  if (typeof content === "string") {
+    output += `${content}
+
+`;
+  } else if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block.type === "text" && block.text) {
+        output += `${block.text}
+
+`;
+      } else if (block.type === "tool_use") {
+        output += `**Tool Use:** \`${block.name}\`
+
+`;
+        output += formatToolInput(block.input || {});
+        const toolUseId = block.id;
+        if (toolUseId) {
+          const result = findToolResult(messages, index, toolUseId);
+          if (result) {
+            output += "**Result:**\n";
+            output += formatToolResultContent(result.content);
+          }
+        }
+      }
+    }
+  }
+  if (msg.message.usage) {
+    output += formatTokenUsage(msg.message.usage);
   }
   return output;
 }
@@ -18629,7 +18652,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 async function main() {
-  console.error("Conversation Memory V3 MCP server running via stdio");
+  console.error("Conversation Memory MCP server running via stdio");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

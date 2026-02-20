@@ -1,18 +1,18 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import { initDatabaseV3, openDatabase, insertPendingEventV3, insertObservationV3, searchObservationsV3, getObservationV3, getAllPendingEventsV3 } from './db.v3.js';
+import { initDatabase, openDatabase, insertPendingEvent, insertObservation, searchObservations, getObservation, getAllPendingEvents } from './db.js';
 
-describe('Database V3 Schema', () => {
+describe('Database Schema', () => {
   let db: Database.Database;
 
   beforeEach(() => {
     // Use in-memory database for testing
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
-    db = initDatabaseV3();
+    db = initDatabase();
   });
 
-  describe('initDatabaseV3', () => {
+  describe('initDatabase', () => {
     test('creates all required tables', () => {
       const tables = db.prepare(`
         SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
@@ -21,7 +21,7 @@ describe('Database V3 Schema', () => {
 
       const tableNames = tables.map(t => t.name);
 
-      // New V3 tables
+      // Tables
       expect(tableNames).toContain('observations');
       expect(tableNames).toContain('pending_events');
       expect(tableNames).toContain('vec_observations');
@@ -123,11 +123,11 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('insertPendingEventV3', () => {
+  describe('insertPendingEvent', () => {
     test('inserts pending event with all fields', () => {
       const now = Date.now();
 
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'test-session',
         project: 'test-project',
         toolName: 'bash',
@@ -150,7 +150,7 @@ describe('Database V3 Schema', () => {
     });
 
     test('auto-increments id', () => {
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-1',
         project: 'project-1',
         toolName: 'tool1',
@@ -159,7 +159,7 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now(),
       });
 
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-2',
         project: 'project-2',
         toolName: 'tool2',
@@ -181,7 +181,7 @@ describe('Database V3 Schema', () => {
     test('stores special characters in compressed field', () => {
       const specialData = 'Multi\nLine\tData\twith\x00null';
 
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'test-session',
         project: 'test-project',
         toolName: 'bash',
@@ -195,12 +195,12 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('insertObservationV3', () => {
+  describe('insertObservation', () => {
     test('inserts observation with all required fields', () => {
       const now = Date.now();
       const embedding = new Array(768).fill(0.1);
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Test Observation',
         content: 'This is test content for the observation',
         project: 'test-project',
@@ -225,7 +225,7 @@ describe('Database V3 Schema', () => {
     test('inserts observation without sessionId', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Test Observation',
         content: 'Content without session',
         project: 'test-project',
@@ -243,7 +243,7 @@ describe('Database V3 Schema', () => {
     test('stores embedding in vec_observations table', () => {
       const embedding = new Array(768).fill(0.5);
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Test',
         content: 'Content',
         project: 'project',
@@ -264,7 +264,7 @@ describe('Database V3 Schema', () => {
     test('handles multi-byte UTF-8 characters', () => {
       const utf8Data = 'Hello 世界 🌍 Korean: 한국어';
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: utf8Data,
         content: utf8Data,
         project: 'project',
@@ -281,12 +281,12 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('searchObservationsV3', () => {
+  describe('searchObservations', () => {
     beforeEach(() => {
       const embedding1 = new Array(768).fill(0.1);
       const embedding2 = new Array(768).fill(0.9);
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Database optimization',
         content: 'Improved query performance with indexes',
         project: 'project-a',
@@ -295,7 +295,7 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now() - 1000,
       }, embedding1);
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'API refactoring',
         content: 'Cleaned up REST endpoints',
         project: 'project-a',
@@ -304,7 +304,7 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now(),
       }, embedding2);
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Testing improvements',
         content: 'Added unit tests for core modules',
         project: 'project-b',
@@ -315,20 +315,20 @@ describe('Database V3 Schema', () => {
     });
 
     test('returns all observations when no filters provided', () => {
-      const results = searchObservationsV3(db, {});
+      const results = searchObservations(db, {});
 
       expect(results).toHaveLength(3);
     });
 
     test('filters by project', () => {
-      const results = searchObservationsV3(db, { project: 'project-a' });
+      const results = searchObservations(db, { project: 'project-a' });
 
       expect(results).toHaveLength(2);
       expect(results.every(r => r.project === 'project-a')).toBe(true);
     });
 
     test('filters by sessionId', () => {
-      const results = searchObservationsV3(db, { sessionId: 'session-1' });
+      const results = searchObservations(db, { sessionId: 'session-1' });
 
       expect(results).toHaveLength(1);
       expect(results[0].sessionId).toBe('session-1');
@@ -336,7 +336,7 @@ describe('Database V3 Schema', () => {
 
     test('filters by date range', () => {
       const now = Date.now();
-      const results = searchObservationsV3(db, {
+      const results = searchObservations(db, {
         after: now - 500,
         before: now + 500,
       });
@@ -346,13 +346,13 @@ describe('Database V3 Schema', () => {
     });
 
     test('respects limit parameter', () => {
-      const results = searchObservationsV3(db, { limit: 2 });
+      const results = searchObservations(db, { limit: 2 });
 
       expect(results.length).toBeLessThanOrEqual(2);
     });
 
     test('returns observations ordered by timestamp descending', () => {
-      const results = searchObservationsV3(db, {});
+      const results = searchObservations(db, {});
 
       for (let i = 1; i < results.length; i++) {
         expect(results[i].timestamp).toBeLessThanOrEqual(results[i - 1].timestamp);
@@ -360,7 +360,7 @@ describe('Database V3 Schema', () => {
     });
 
     test('includes all required fields in results', () => {
-      const results = searchObservationsV3(db, { limit: 1 });
+      const results = searchObservations(db, { limit: 1 });
 
       expect(results[0]).toHaveProperty('id');
       expect(results[0]).toHaveProperty('title');
@@ -372,11 +372,11 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('getObservationV3', () => {
+  describe('getObservation', () => {
     test('retrieves observation by id', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Test Title',
         content: 'Test Content',
         project: 'test-project',
@@ -385,7 +385,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const observation = getObservationV3(db, 1);
+      const observation = getObservation(db, 1);
 
       expect(observation).toBeDefined();
       expect(observation!.id).toBe(1);
@@ -396,7 +396,7 @@ describe('Database V3 Schema', () => {
     });
 
     test('returns null for non-existent id', () => {
-      const observation = getObservationV3(db, 999);
+      const observation = getObservation(db, 999);
 
       expect(observation).toBeNull();
     });
@@ -404,7 +404,7 @@ describe('Database V3 Schema', () => {
     test('includes all fields in result', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Full Test',
         content: 'Full content test',
         project: 'full-project',
@@ -413,7 +413,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const observation = getObservationV3(db, 1);
+      const observation = getObservation(db, 1);
 
       expect(observation).toHaveProperty('id');
       expect(observation).toHaveProperty('title');
@@ -425,12 +425,12 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('getAllPendingEventsV3', () => {
+  describe('getAllPendingEvents', () => {
     test('returns all events for a session ordered by created_at', () => {
       const now = Date.now();
 
       // Insert events for session-1
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-1',
         project: 'project-a',
         toolName: 'bash',
@@ -439,7 +439,7 @@ describe('Database V3 Schema', () => {
         createdAt: now - 2000,
       });
 
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-1',
         project: 'project-a',
         toolName: 'read',
@@ -449,7 +449,7 @@ describe('Database V3 Schema', () => {
       });
 
       // Insert event for different session
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-2',
         project: 'project-b',
         toolName: 'write',
@@ -458,7 +458,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const results = getAllPendingEventsV3(db, 'session-1');
+      const results = getAllPendingEvents(db, 'session-1');
 
       expect(results).toHaveLength(2);
       expect(results[0].compressed).toBe('first event');
@@ -468,13 +468,13 @@ describe('Database V3 Schema', () => {
     });
 
     test('returns empty array for non-existent session', () => {
-      const results = getAllPendingEventsV3(db, 'non-existent-session');
+      const results = getAllPendingEvents(db, 'non-existent-session');
 
       expect(results).toEqual([]);
     });
 
     test('includes id in results', () => {
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'session-1',
         project: 'project-a',
         toolName: 'bash',
@@ -483,7 +483,7 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now(),
       });
 
-      const results = getAllPendingEventsV3(db, 'session-1');
+      const results = getAllPendingEvents(db, 'session-1');
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe(1);
@@ -492,7 +492,7 @@ describe('Database V3 Schema', () => {
     test('maps column names correctly', () => {
       const now = Date.now();
 
-      insertPendingEventV3(db, {
+      insertPendingEvent(db, {
         sessionId: 'test-session',
         project: 'test-project',
         toolName: 'bash',
@@ -501,7 +501,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const results = getAllPendingEventsV3(db, 'test-session');
+      const results = getAllPendingEvents(db, 'test-session');
 
       expect(results[0].sessionId).toBe('test-session');
       expect(results[0].toolName).toBe('bash');
@@ -511,7 +511,7 @@ describe('Database V3 Schema', () => {
 
   describe('openDatabase', () => {
     test('creates new database if not exists', () => {
-      // initDatabaseV3 already created the tables in beforeEach
+      // initDatabase already created the tables in beforeEach
       // openDatabase should just open without wiping
       const openDb = openDatabase();
 
@@ -530,7 +530,7 @@ describe('Database V3 Schema', () => {
 
     test('does not wipe existing database', () => {
       // Insert data using the current db connection
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Persistent Data',
         content: 'This should persist',
         project: 'test-project',
@@ -539,11 +539,11 @@ describe('Database V3 Schema', () => {
       });
 
       // Verify data exists in current connection
-      const observationBefore = getObservationV3(db, 1);
+      const observationBefore = getObservation(db, 1);
       expect(observationBefore).toBeDefined();
       expect(observationBefore!.title).toBe('Persistent Data');
 
-      // Calling initDatabaseV3 would wipe, but openDatabase should not
+      // Calling initDatabase would wipe, but openDatabase should not
       // Since we're using :memory:, openDatabase creates a new separate database
       // In production with file-based DB, openDatabase would preserve data
       // This test verifies openDatabase doesn't throw and creates proper schema
@@ -560,65 +560,9 @@ describe('Database V3 Schema', () => {
     });
   });
 
-  describe('V2 database detection', () => {
-    test('throws error when v2 database detected', () => {
-      // Create a fresh v2-style database
-      const v2Db = new Database(':memory:');
-      sqliteVec.load(v2Db);
-
-      // Create only the v2 exchanges table (no v3 tables)
-      v2Db.exec(`
-        CREATE TABLE exchanges (
-          id INTEGER PRIMARY KEY,
-          content TEXT
-        )
-      `);
-
-      // Now test the v2 detection logic directly
-      // The detection happens in createDatabase when checking for v3 tables
-      const tables = v2Db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-      const tableNames = new Set(tables.map(t => t.name));
-
-      const v3Tables = ['pending_events', 'observations', 'vec_observations'];
-      const hasV3Tables = v3Tables.every(t => tableNames.has(t));
-
-      // If tables exist but v3 tables are missing, and exchanges exists, it's v2
-      expect(tableNames.size).toBeGreaterThan(0);
-      expect(hasV3Tables).toBe(false);
-      expect(tableNames.has('exchanges')).toBe(true);
-
-      v2Db.close();
-    });
-
-    test('does not throw for empty database', () => {
-      // Create fresh database with no tables
-      const freshDb = new Database(':memory:');
-
-      // Manually create v3 tables to simulate openDatabase behavior
-      const tables = freshDb.prepare(`
-        SELECT name FROM sqlite_master WHERE type='table'
-      `).all() as Array<{ name: string }>;
-
-      expect(tables).toHaveLength(0);
-
-      freshDb.close();
-    });
-
-    test('does not throw for valid v3 database', () => {
-      // Current db from beforeEach is a valid v3 database
-      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-      const tableNames = new Set(tables.map(t => t.name));
-
-      const v3Tables = ['pending_events', 'observations', 'vec_observations'];
-      const hasV3Tables = v3Tables.every(t => tableNames.has(t));
-
-      expect(hasV3Tables).toBe(true);
-    });
-  });
-
   describe('Edge cases and error handling', () => {
-    test('insertPendingEventV3 returns inserted row id', () => {
-      const id = insertPendingEventV3(db, {
+    test('insertPendingEvent returns inserted row id', () => {
+      const id = insertPendingEvent(db, {
         sessionId: 'session-1',
         project: 'project-a',
         toolName: 'bash',
@@ -631,8 +575,8 @@ describe('Database V3 Schema', () => {
       expect(id).toBeGreaterThan(0);
     });
 
-    test('insertObservationV3 returns inserted row id', () => {
-      const id = insertObservationV3(db, {
+    test('insertObservation returns inserted row id', () => {
+      const id = insertObservation(db, {
         title: 'Test',
         content: 'Content',
         project: 'project',
@@ -644,8 +588,8 @@ describe('Database V3 Schema', () => {
       expect(id).toBeGreaterThan(0);
     });
 
-    test('insertObservationV3 works without embedding', () => {
-      const id = insertObservationV3(db, {
+    test('insertObservation works without embedding', () => {
+      const id = insertObservation(db, {
         title: 'No Embedding',
         content: 'This observation has no embedding',
         project: 'project',
@@ -664,10 +608,10 @@ describe('Database V3 Schema', () => {
       expect(vecRow).toBeUndefined();
     });
 
-    test('searchObservationsV3 with combined filters', () => {
+    test('searchObservations with combined filters', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Combined Test 1',
         content: 'Content 1',
         project: 'project-a',
@@ -676,7 +620,7 @@ describe('Database V3 Schema', () => {
         createdAt: now - 1000,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Combined Test 2',
         content: 'Content 2',
         project: 'project-a',
@@ -685,7 +629,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Combined Test 3',
         content: 'Content 3',
         project: 'project-b',
@@ -695,7 +639,7 @@ describe('Database V3 Schema', () => {
       });
 
       // Filter by project AND session
-      const results = searchObservationsV3(db, {
+      const results = searchObservations(db, {
         project: 'project-a',
         sessionId: 'session-1',
       });
@@ -704,10 +648,10 @@ describe('Database V3 Schema', () => {
       expect(results[0].title).toBe('Combined Test 1');
     });
 
-    test('searchObservationsV3 with after filter only', () => {
+    test('searchObservations with after filter only', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Old Observation',
         content: 'Old content',
         project: 'project',
@@ -715,7 +659,7 @@ describe('Database V3 Schema', () => {
         createdAt: now - 5000,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'New Observation',
         content: 'New content',
         project: 'project',
@@ -723,16 +667,16 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const results = searchObservationsV3(db, { after: now - 1000 });
+      const results = searchObservations(db, { after: now - 1000 });
 
       expect(results).toHaveLength(1);
       expect(results[0].title).toBe('New Observation');
     });
 
-    test('searchObservationsV3 with before filter only', () => {
+    test('searchObservations with before filter only', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Old Observation',
         content: 'Old content',
         project: 'project',
@@ -740,7 +684,7 @@ describe('Database V3 Schema', () => {
         createdAt: now - 5000,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'New Observation',
         content: 'New content',
         project: 'project',
@@ -748,16 +692,16 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      const results = searchObservationsV3(db, { before: now - 1000 });
+      const results = searchObservations(db, { before: now - 1000 });
 
       expect(results).toHaveLength(1);
       expect(results[0].title).toBe('Old Observation');
     });
 
-    test('searchObservationsV3 with all filters combined', () => {
+    test('searchObservations with all filters combined', () => {
       const now = Date.now();
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'Match',
         content: 'Should match all filters',
         project: 'project-a',
@@ -766,7 +710,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'No Match - Wrong Project',
         content: 'Wrong project',
         project: 'project-b',
@@ -775,7 +719,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'No Match - Wrong Session',
         content: 'Wrong session',
         project: 'project-a',
@@ -784,7 +728,7 @@ describe('Database V3 Schema', () => {
         createdAt: now,
       });
 
-      insertObservationV3(db, {
+      insertObservation(db, {
         title: 'No Match - Wrong Time',
         content: 'Wrong time',
         project: 'project-a',
@@ -793,7 +737,7 @@ describe('Database V3 Schema', () => {
         createdAt: now - 10000,
       });
 
-      const results = searchObservationsV3(db, {
+      const results = searchObservations(db, {
         project: 'project-a',
         sessionId: 'session-1',
         after: now - 1000,
@@ -805,8 +749,8 @@ describe('Database V3 Schema', () => {
       expect(results[0].title).toBe('Match');
     });
 
-    test('searchObservationsV3 returns empty array when no matches', () => {
-      insertObservationV3(db, {
+    test('searchObservations returns empty array when no matches', () => {
+      insertObservation(db, {
         title: 'Test',
         content: 'Content',
         project: 'project-a',
@@ -814,13 +758,13 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now(),
       });
 
-      const results = searchObservationsV3(db, { project: 'non-existent-project' });
+      const results = searchObservations(db, { project: 'non-existent-project' });
 
       expect(results).toEqual([]);
     });
 
     test('handles empty strings in fields', () => {
-      const id = insertObservationV3(db, {
+      const id = insertObservation(db, {
         title: '',
         content: '',
         project: '',
@@ -829,7 +773,7 @@ describe('Database V3 Schema', () => {
         createdAt: 0,
       });
 
-      const observation = getObservationV3(db, id);
+      const observation = getObservation(db, id);
 
       expect(observation).toBeDefined();
       expect(observation!.title).toBe('');
@@ -841,7 +785,7 @@ describe('Database V3 Schema', () => {
     test('handles very long content', () => {
       const longContent = 'a'.repeat(100000);
 
-      const id = insertObservationV3(db, {
+      const id = insertObservation(db, {
         title: 'Long Content Test',
         content: longContent,
         project: 'project',
@@ -849,7 +793,7 @@ describe('Database V3 Schema', () => {
         createdAt: Date.now(),
       });
 
-      const observation = getObservationV3(db, id);
+      const observation = getObservation(db, id);
 
       expect(observation!.content).toBe(longContent);
       expect(observation!.content.length).toBe(100000);

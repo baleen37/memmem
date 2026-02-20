@@ -1,16 +1,7 @@
 /**
- * V3 Observation-Only Search
+ * Observation Search
  *
- * Simplified search using only observations table with vector similarity.
- * Removed:
- * - exchange-based search
- * - multi-concept (array query) search
- * - vec_exchanges table usage
- * - observations_fts table (full-text search)
- *
- * Uses:
- * - observations table (main storage)
- * - vec_observations table (vector embeddings)
+ * Search using observations table with vector similarity.
  */
 
 import Database from 'better-sqlite3';

@@ -16,7 +16,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { searchObservationsV3, type ObservationResultV3 } from '../core/db.v3.js';
+import { searchObservations, type ObservationResult } from '../core/db.js';
 
 /**
  * Configuration for the SessionStart hook.
@@ -64,7 +64,7 @@ function countTokens(text: string): number {
 /**
  * Format a single observation as a markdown bullet point.
  */
-function formatObservation(obs: ObservationResultV3): string {
+function formatObservation(obs: ObservationResult): string {
   // Format: "- title: content"
   return `- ${obs.title}: ${obs.content}`;
 }
@@ -88,7 +88,7 @@ export async function handleSessionStart(
   const cutoffTimestamp = calculateRecencyCutoff(recencyDays);
 
   // Step 2: Query recent observations
-  const observations = searchObservationsV3(db, {
+  const observations = searchObservations(db, {
     project: projectOnly ? project : undefined,
     after: cutoffTimestamp,
     limit: maxObservations,

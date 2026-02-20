@@ -15,12 +15,12 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import type Database from 'better-sqlite3';
 
 // Mock the search function - factory must define mock inline
-vi.mock('../core/search.v3.js', () => ({
+vi.mock('../core/search.js', () => ({
   search: vi.fn(),
 }));
 
 // Mock the observations function
-vi.mock('../core/observations.v3.js', () => ({
+vi.mock('../core/observations.js', () => ({
   findByIds: vi.fn(),
 }));
 
@@ -41,8 +41,8 @@ import {
 } from './server.js';
 
 // Import mocked modules to get typed mock functions
-import { search as mockSearch } from '../core/search.v3.js';
-import { findByIds as mockFindByIds } from '../core/observations.v3.js';
+import { search as mockSearch } from '../core/search.js';
+import { findByIds as mockFindByIds } from '../core/observations.js';
 import { readConversation as mockReadConversation } from '../core/read.js';
 
 describe('MCP Server Handlers', () => {

@@ -55,7 +55,7 @@ var init_paths = __esm({
   }
 });
 
-// src/core/db.v3.ts
+// src/core/db.ts
 import Database from "better-sqlite3";
 import path2 from "path";
 import fs2 from "fs";
@@ -70,7 +70,7 @@ function createDatabase(wipe) {
     fs2.mkdirSync(dbDir, { recursive: true });
   }
   if (wipe && dbPath !== ":memory:" && fs2.existsSync(dbPath)) {
-    console.log("Deleting old database file for V3 clean slate...");
+    console.log("Deleting old database file for clean slate...");
     fs2.unlinkSync(dbPath);
   }
   const db = new Database(dbPath);
@@ -78,15 +78,6 @@ function createDatabase(wipe) {
   db.pragma("journal_mode = WAL");
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
   const tableNames = new Set(tables.map((t) => t.name));
-  if (!wipe && tableNames.size > 0) {
-    const v3Tables = ["pending_events", "observations", "vec_observations"];
-    const hasV3Tables = v3Tables.every((t) => tableNames.has(t));
-    if (!hasV3Tables && tableNames.has("exchanges")) {
-      throw new Error(
-        "Database schema mismatch: v2 database detected. Please remove the old database (~/.config/memmem/conversation-index/conversations.db) and restart. V3 will create a fresh schema. Note: v2 data cannot be migrated to v3."
-      );
-    }
-  }
   if (!tableNames.has("pending_events")) {
     db.exec(`
       CREATE TABLE pending_events (
@@ -129,7 +120,7 @@ function createDatabase(wipe) {
   }
   return db;
 }
-function insertPendingEventV3(db, event) {
+function insertPendingEvent(db, event) {
   const stmt = db.prepare(`
     INSERT INTO pending_events (session_id, project, tool_name, compressed, timestamp, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -144,7 +135,7 @@ function insertPendingEventV3(db, event) {
   );
   return result.lastInsertRowid;
 }
-function insertObservationV3(db, observation, embedding) {
+function insertObservation(db, observation, embedding) {
   const stmt = db.prepare(`
     INSERT INTO observations (title, content, project, session_id, timestamp, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -167,7 +158,7 @@ function insertObservationV3(db, observation, embedding) {
   }
   return rowid;
 }
-function getAllPendingEventsV3(db, sessionId) {
+function getAllPendingEvents(db, sessionId) {
   const stmt = db.prepare(`
     SELECT id, session_id as sessionId, project, tool_name as toolName, compressed, timestamp, created_at as createdAt
     FROM pending_events
@@ -176,7 +167,7 @@ function getAllPendingEventsV3(db, sessionId) {
   `);
   return stmt.all(sessionId);
 }
-function searchObservationsV3(db, options = {}) {
+function searchObservations(db, options = {}) {
   const { project, sessionId, after, before, limit = 100 } = options;
   const params = [];
   let sql = `
@@ -205,8 +196,8 @@ function searchObservationsV3(db, options = {}) {
   const stmt = db.prepare(sql);
   return stmt.all(...params);
 }
-var init_db_v3 = __esm({
-  "src/core/db.v3.ts"() {
+var init_db = __esm({
+  "src/core/db.ts"() {
     "use strict";
     init_paths();
   }
@@ -227,7 +218,7 @@ function formatObservation(obs) {
 async function handleSessionStart(db, project, config) {
   const { maxObservations, maxTokens, recencyDays, projectOnly } = config;
   const cutoffTimestamp = calculateRecencyCutoff(recencyDays);
-  const observations = searchObservationsV3(db, {
+  const observations = searchObservations(db, {
     project: projectOnly ? project : void 0,
     after: cutoffTimestamp,
     limit: maxObservations
@@ -272,7 +263,7 @@ async function handleSessionStart(db, project, config) {
 var init_session_start = __esm({
   "src/hooks/session-start.ts"() {
     "use strict";
-    init_db_v3();
+    init_db();
   }
 });
 
@@ -334,7 +325,7 @@ async function main() {
 var init_inject_cli = __esm({
   "src/cli/inject-cli.ts"() {
     "use strict";
-    init_db_v3();
+    init_db();
     init_session_start();
     main();
   }
@@ -517,13 +508,13 @@ function handlePostToolUse(db, sessionId, project, toolName, toolData) {
     timestamp: now,
     createdAt: now
   };
-  insertPendingEventV3(db, event);
+  insertPendingEvent(db, event);
 }
 var init_post_tool_use = __esm({
   "src/hooks/post-tool-use.ts"() {
     "use strict";
     init_compress();
-    init_db_v3();
+    init_db();
   }
 });
 
@@ -2188,7 +2179,7 @@ var init_embeddings = __esm({
   }
 });
 
-// src/core/observations.v3.ts
+// src/core/observations.ts
 async function create(db, title, content, project, sessionId, timestamp) {
   const now = Date.now();
   const obsTimestamp = timestamp ?? now;
@@ -2204,12 +2195,12 @@ async function create(db, title, content, project, sessionId, timestamp) {
   const embeddingText = `${title}
 ${content}`;
   const embedding = await generateEmbedding(embeddingText);
-  return insertObservationV3(db, observation, embedding);
+  return insertObservation(db, observation, embedding);
 }
-var init_observations_v3 = __esm({
-  "src/core/observations.v3.ts"() {
+var init_observations = __esm({
+  "src/core/observations.ts"() {
     "use strict";
-    init_db_v3();
+    init_db();
     init_embeddings();
   }
 });
@@ -2217,7 +2208,7 @@ var init_observations_v3 = __esm({
 // src/hooks/stop.ts
 async function handleStop(db, options) {
   const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE } = options;
-  const allEvents = getAllPendingEventsV3(db, sessionId);
+  const allEvents = getAllPendingEvents(db, sessionId);
   if (allEvents.length < MIN_EVENT_THRESHOLD) {
     return;
   }
@@ -2268,8 +2259,8 @@ var init_stop = __esm({
   "src/hooks/stop.ts"() {
     "use strict";
     init_llm();
-    init_observations_v3();
-    init_db_v3();
+    init_observations();
+    init_db();
     DEFAULT_BATCH_SIZE = 15;
     MIN_EVENT_THRESHOLD = 3;
   }
@@ -2348,7 +2339,7 @@ async function main2() {
 var init_observe_cli = __esm({
   "src/cli/observe-cli.ts"() {
     "use strict";
-    init_db_v3();
+    init_db();
     init_post_tool_use();
     init_stop();
     init_llm();

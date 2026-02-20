@@ -1,5 +1,5 @@
 /**
- * V3 MCP Server for Conversation Memory.
+ * MCP Server for Conversation Memory.
  *
  * Simplified 3-tool architecture:
  * 1. search - Single query string, returns compact observations
@@ -20,10 +20,10 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { search as searchV3 } from '../core/search.v3.js';
-import { findByIds as getObservationsByIds } from '../core/observations.v3.js';
+import { search } from '../core/search.js';
+import { findByIds as getObservationsByIds } from '../core/observations.js';
 import { readConversation } from '../core/read.js';
-import { openDatabase } from '../core/db.v3.js';
+import { openDatabase } from '../core/db.js';
 
 // Zod Schemas for Input Validation
 
@@ -123,7 +123,7 @@ export async function handleSearch(
   params: SearchInput,
   db: Database.Database
 ): Promise<SearchResult[]> {
-  const results = await searchV3(params.query, {
+  const results = await search(params.query, {
     db,
     limit: params.limit,
     after: params.after,
@@ -316,7 +316,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'search') {
       const params = SearchInputSchema.parse(args);
 
-      // Open V3 database (persistent storage)
+      // Open database (persistent storage)
       const db = openDatabase();
       try {
         const results = await handleSearch(params, db);
@@ -338,7 +338,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'get_observations') {
       const params = GetObservationsInputSchema.parse(args);
 
-      // Open V3 database (persistent storage)
+      // Open database (persistent storage)
       const db = openDatabase();
       try {
         const observations = await handleGetObservations(params, db);
@@ -399,7 +399,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Main Function
 
 async function main() {
-  console.error('Conversation Memory V3 MCP server running via stdio');
+  console.error('Conversation Memory MCP server running via stdio');
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

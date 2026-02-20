@@ -7,7 +7,7 @@
  * - For Stop: Batch extracts observations from pending_events using LLM
  */
 
-import { openDatabase } from '../core/db.v3.js';
+import { openDatabase } from '../core/db.js';
 import { handlePostToolUse } from '../hooks/post-tool-use.js';
 import { handleStop } from '../hooks/stop.js';
 import { loadConfig, createProvider } from '../core/llm/index.js';

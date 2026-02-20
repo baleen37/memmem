@@ -1,21 +1,21 @@
 /**
- * Integration Tests for V3 Architecture
+ * Integration Tests
  *
  * Comprehensive tests for the complete workflow:
  * 1. PostToolUse → pending_events → Stop → observations (E2E workflow)
  * 2. SessionStart hook injection workflow
- * 3. MCP tools work with V3 database
+ * 3. MCP tools work with database
  * 4. Full workflow from tool event to observation to search/injection
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3, getAllPendingEventsV3, getObservationV3 } from './core/db.v3.js';
+import { initDatabase, getAllPendingEvents, getObservation } from './core/db.js';
 import { handlePostToolUse } from './hooks/post-tool-use.js';
 import { handleStop, type StopHookOptions } from './hooks/stop.js';
 import { handleSessionStart, type SessionStartConfig } from './hooks/session-start.js';
-import { search as searchV3 } from './core/search.v3.js';
-import { findByIds as getObservationsByIds } from './core/observations.v3.js';
+import { search } from './core/search.js';
+import { findByIds as getObservationsByIds } from './core/observations.js';
 import type { LLMProvider } from './core/llm/index.js';
 
 // Mock LLM provider
@@ -38,12 +38,12 @@ vi.mock('./core/embeddings.js', () => ({
   generateEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
 }));
 
-describe('V3 Integration Tests', () => {
+describe('Integration Tests', () => {
   let db: Database.Database;
 
   beforeEach(() => {
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
-    db = initDatabaseV3();
+    db = initDatabase();
     vi.clearAllMocks();
   });
 
@@ -72,7 +72,7 @@ describe('V3 Integration Tests', () => {
       handlePostToolUse(db, sessionId, project, 'Bash', { command: 'npm run lint', exitCode: 1, stderr: 'Error: Unused variable' });
 
       // Step 2: Verify pending_events were stored
-      const pendingEvents = getAllPendingEventsV3(db, sessionId);
+      const pendingEvents = getAllPendingEvents(db, sessionId);
       expect(pendingEvents).toHaveLength(6);
       expect(pendingEvents[0].toolName).toBe('Read');
       expect(pendingEvents[0].project).toBe(project);
@@ -96,8 +96,8 @@ describe('V3 Integration Tests', () => {
       await handleStop(db, stopOptions);
 
       // Step 4: Verify observations were created
-      const obs1 = getObservationV3(db, 1);
-      const obs2 = getObservationV3(db, 2);
+      const obs1 = getObservation(db, 1);
+      const obs2 = getObservation(db, 2);
 
       expect(obs1).not.toBeNull();
       expect(obs1?.title).toBe('Fixed async auth bug');
@@ -153,8 +153,8 @@ describe('V3 Integration Tests', () => {
       expect(mockProvider.complete).toHaveBeenCalledTimes(2);
 
       // Should have created 2 observations
-      const obs1 = getObservationV3(db, 1);
-      const obs2 = getObservationV3(db, 2);
+      const obs1 = getObservation(db, 1);
+      const obs2 = getObservation(db, 2);
 
       expect(obs1?.title).toBe('Batch 1 obs');
       expect(obs2?.title).toBe('Batch 2 obs');
@@ -185,7 +185,7 @@ describe('V3 Integration Tests', () => {
       expect(mockProvider.complete).not.toHaveBeenCalled();
 
       // No observations should be created
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).toBeNull();
     });
 
@@ -200,7 +200,7 @@ describe('V3 Integration Tests', () => {
       handlePostToolUse(db, sessionId, project, 'LSP', { operation: 'goToDefinition' }); // Should be filtered
 
       // Only Read and Bash should be in pending_events
-      const pendingEvents = getAllPendingEventsV3(db, sessionId);
+      const pendingEvents = getAllPendingEvents(db, sessionId);
       expect(pendingEvents).toHaveLength(2);
       expect(pendingEvents[0].toolName).toBe('Read');
       expect(pendingEvents[1].toolName).toBe('Bash');
@@ -369,7 +369,7 @@ describe('V3 Integration Tests', () => {
       });
 
       // Search for observations
-      const results = await searchV3('authentication', {
+      const results = await search('authentication', {
         db,
         limit: 10,
       });
@@ -445,7 +445,7 @@ describe('V3 Integration Tests', () => {
       });
 
       // Search with project filter
-      const results = await searchV3('feature', {
+      const results = await search('feature', {
         db,
         limit: 10,
         projects: ['project-a'],
@@ -484,7 +484,7 @@ describe('V3 Integration Tests', () => {
       const afterDate = new Date(now - 7 * dayInMs).toISOString().split('T')[0];
       const beforeDate = new Date(now - 3 * dayInMs).toISOString().split('T')[0];
 
-      const results = await searchV3('observation', {
+      const results = await search('observation', {
         db,
         limit: 10,
         after: afterDate,
@@ -519,7 +519,7 @@ describe('V3 Integration Tests', () => {
       });
 
       // Search with files filter
-      const results = await searchV3('auth', {
+      const results = await search('auth', {
         db,
         limit: 10,
         files: ['/src/auth.ts'],
@@ -609,7 +609,7 @@ describe('V3 Integration Tests', () => {
       expect(obsCountAfterDay2).toBe(3);
 
       // Search should find all related observations
-      const searchResults = await searchV3('auth verify', {
+      const searchResults = await search('auth verify', {
         db,
         limit: 10,
       });
@@ -653,13 +653,13 @@ describe('V3 Integration Tests', () => {
       expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('project-b') as { count: number }).count).toBe(1);
 
       // Search should respect project filter
-      const resultsA = await searchV3('fix', {
+      const resultsA = await search('fix', {
         db,
         limit: 10,
         projects: ['project-a'],
       });
 
-      const resultsB = await searchV3('fix', {
+      const resultsB = await search('fix', {
         db,
         limit: 10,
         projects: ['project-b'],
@@ -761,8 +761,8 @@ describe('V3 Integration Tests', () => {
       // Both observations should be created
       expect((db.prepare('SELECT COUNT(*) as count FROM observations WHERE project = ?').get('test-project') as { count: number }).count).toBe(2);
 
-      const obs1 = getObservationV3(db, 1);
-      const obs2 = getObservationV3(db, 2);
+      const obs1 = getObservation(db, 1);
+      const obs2 = getObservation(db, 2);
 
       expect(obs1?.sessionId).toBe('session-1');
       expect(obs2?.sessionId).toBe('session-2');

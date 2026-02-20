@@ -10,7 +10,7 @@
 
 import Database from 'better-sqlite3';
 import { compressToolData } from '../core/compress.js';
-import { insertPendingEventV3, type PendingEventV3 } from '../core/db.v3.js';
+import { insertPendingEvent, type PendingEvent } from '../core/db.js';
 
 /**
  * Handle PostToolUse hook - compress and store tool events.
@@ -38,7 +38,7 @@ export function handlePostToolUse(
 
   // Step 3: Store in pending_events table
   const now = Date.now();
-  const event: PendingEventV3 = {
+  const event: PendingEvent = {
     sessionId,
     project,
     toolName,
@@ -47,5 +47,5 @@ export function handlePostToolUse(
     createdAt: now,
   };
 
-  insertPendingEventV3(db, event);
+  insertPendingEvent(db, event);
 }

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3 } from './db.v3.js';
+import { initDatabase } from './db.js';
 import {
   create,
   findById,
   findByIds,
-  type Observation
-} from './observations.v3.js';
+  type ObservationData
+} from './observations.js';
 
 // Mock embedding generation - create a valid 768-dimensional vector
 const createMockEmbedding = (): number[] => Array.from({ length: 768 }, () => Math.random() * 2 - 1);
@@ -17,7 +17,7 @@ vi.mock('./embeddings.js', () => ({
   initEmbeddings: async () => {}
 }));
 
-describe('observations.v3', () => {
+describe('observations', () => {
   let db: Database.Database;
   let testDbPath: string;
 
@@ -25,7 +25,7 @@ describe('observations.v3', () => {
     // Use in-memory database for tests
     testDbPath = ':memory:';
     process.env.CONVERSATION_MEMORY_DB_PATH = testDbPath;
-    db = initDatabaseV3();
+    db = initDatabase();
   });
 
   afterEach(() => {
@@ -395,7 +395,7 @@ describe('observations.v3', () => {
 
       // Verify all expected properties exist with correct types
       expect(observation).not.toBeNull();
-      const obs: Observation = observation!;
+      const obs: ObservationData = observation!;
 
       expect(typeof obs.id).toBe('number');
       expect(typeof obs.title).toBe('string');

@@ -11,7 +11,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3, insertObservationV3, getObservationV3 } from '../core/db.v3.js';
+import { initDatabase, insertObservation, getObservation } from '../core/db.js';
 import { handleSessionStart, type SessionStartConfig, type SessionStartResult } from './session-start.js';
 
 // Mock embeddings module
@@ -28,7 +28,7 @@ describe('SessionStart Hook', () => {
   beforeEach(() => {
     // Use in-memory database for testing
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
-    db = initDatabaseV3();
+    db = initDatabase();
     vi.clearAllMocks();
   });
 
@@ -56,7 +56,7 @@ describe('SessionStart Hook', () => {
 
     test('should format observations as markdown with header', async () => {
       // Create test observation
-      insertObservationV3(
+      insertObservation(
         db,
         {
           title: 'Fixed auth bug',
@@ -92,7 +92,7 @@ describe('SessionStart Hook', () => {
       ];
 
       for (const obs of observations) {
-        insertObservationV3(
+        insertObservation(
           db,
           {
             title: obs.title,
@@ -124,7 +124,7 @@ describe('SessionStart Hook', () => {
     test('should respect maxObservations limit', async () => {
       // Create 5 observations
       for (let i = 0; i < 5; i++) {
-        insertObservationV3(
+        insertObservation(
           db,
           {
             title: `Observation ${i}`,
@@ -155,13 +155,13 @@ describe('SessionStart Hook', () => {
       const shortContent = 'Short';
       const longContent = 'This is a very long content that uses many tokens '.repeat(10);
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Short obs', content: shortContent, project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
       );
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Long obs', content: longContent, project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -184,13 +184,13 @@ describe('SessionStart Hook', () => {
 
     test('should filter by project when projectOnly is true', async () => {
       // Create observations for different projects
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Project A obs', content: 'Content A', project: 'project-a', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
       );
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Project B obs', content: 'Content B', project: 'project-b', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -212,13 +212,13 @@ describe('SessionStart Hook', () => {
 
     test('should include all projects when projectOnly is false', async () => {
       // Create observations for different projects
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Project A obs', content: 'Content A', project: 'project-a', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
       );
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Project B obs', content: 'Content B', project: 'project-b', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -243,14 +243,14 @@ describe('SessionStart Hook', () => {
       const dayInMs = 24 * 60 * 60 * 1000;
 
       // Create old observation (10 days ago)
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Old obs', content: 'Old content', project: 'test-project', sessionId: 'session-123', timestamp: now - 10 * dayInMs, createdAt: now - 10 * dayInMs },
         mockEmbedding
       );
 
       // Create recent observation (2 days ago)
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Recent obs', content: 'Recent content', project: 'test-project', sessionId: 'session-123', timestamp: now - 2 * dayInMs, createdAt: now - 2 * dayInMs },
         mockEmbedding
@@ -273,7 +273,7 @@ describe('SessionStart Hook', () => {
     test('should count tokens accurately', async () => {
       // Create observation with known content
       const content = 'This content has specific token count';
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Test', content: content, project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -295,7 +295,7 @@ describe('SessionStart Hook', () => {
     });
 
     test('should handle empty content gracefully', async () => {
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'No content', content: '', project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -318,19 +318,19 @@ describe('SessionStart Hook', () => {
       const now = Date.now();
 
       // Create observations with different timestamps
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'First', content: 'First content', project: 'test-project', sessionId: 'session-123', timestamp: now - 3000, createdAt: now - 3000 },
         mockEmbedding
       );
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Second', content: 'Second content', project: 'test-project', sessionId: 'session-123', timestamp: now - 2000, createdAt: now - 2000 },
         mockEmbedding
       );
 
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Third', content: 'Third content', project: 'test-project', sessionId: 'session-123', timestamp: now - 1000, createdAt: now - 1000 },
         mockEmbedding
@@ -353,7 +353,7 @@ describe('SessionStart Hook', () => {
     });
 
     test('should handle special characters in content', async () => {
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Special chars', content: 'Content with "quotes" and `backticks` and $symbols', project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding
@@ -376,7 +376,7 @@ describe('SessionStart Hook', () => {
     test('should use simple approximation (chars/4)', async () => {
       // Create a simple observation
       const content = 'test content';
-      insertObservationV3(
+      insertObservation(
         db,
         { title: 'Test', content: content, project: 'test-project', sessionId: 'session-123', timestamp: Date.now(), createdAt: Date.now() },
         mockEmbedding

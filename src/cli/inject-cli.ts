@@ -9,7 +9,7 @@
  * 4. Returns formatted markdown via stdout for injection
  */
 
-import { openDatabase } from '../core/db.v3.js';
+import { openDatabase } from '../core/db.js';
 import { handleSessionStart } from '../hooks/session-start.js';
 import type { SessionStartConfig } from '../hooks/session-start.js';
 

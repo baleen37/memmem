@@ -12,7 +12,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import { initDatabaseV3, getAllPendingEventsV3, getObservationV3 } from '../core/db.v3.js';
+import { initDatabase, getAllPendingEvents, getObservation } from '../core/db.js';
 import { handlePostToolUse } from './post-tool-use.js';
 import { handleStop, type StopHookOptions } from './stop.js';
 import type { LLMProvider } from '../core/llm/index.js';
@@ -34,7 +34,7 @@ describe('Stop Hook', () => {
   beforeEach(() => {
     // Use in-memory database for testing
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
-    db = initDatabaseV3();
+    db = initDatabase();
     vi.clearAllMocks();
   });
 
@@ -62,7 +62,7 @@ describe('Stop Hook', () => {
       expect(mockLLMProvider.complete).not.toHaveBeenCalled();
 
       // No observations should be created
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).toBeNull();
     });
 
@@ -93,7 +93,7 @@ describe('Stop Hook', () => {
       expect(mockComplete).toHaveBeenCalledTimes(1);
 
       // Observation should be created
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).not.toBeNull();
       expect(obs?.title).toBe('Fixed auth bug');
       expect(obs?.content).toBe('Resolved JWT validation issue');
@@ -203,7 +203,7 @@ describe('Stop Hook', () => {
 
       // Should call LLM but not create any observations
       expect(mockComplete).toHaveBeenCalledTimes(1);
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).toBeNull();
     });
 
@@ -227,7 +227,7 @@ describe('Stop Hook', () => {
       await expect(handleStop(db, options)).resolves.toBeUndefined();
 
       // No observations should be created
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).toBeNull();
     });
 
@@ -398,7 +398,7 @@ describe('Stop Hook', () => {
 
       await handleStop(db, options);
 
-      const obs = getObservationV3(db, 1);
+      const obs = getObservation(db, 1);
       expect(obs).not.toBeNull();
       expect(obs?.title).toBe('Fixed critical bug');
       expect(obs?.content).toBe('Resolved race condition in auth module');
@@ -435,8 +435,8 @@ describe('Stop Hook', () => {
       await handleStop(db, options);
 
       // Should create 2 observations (one from each batch)
-      const obs1 = getObservationV3(db, 1);
-      const obs2 = getObservationV3(db, 2);
+      const obs1 = getObservation(db, 1);
+      const obs2 = getObservation(db, 2);
 
       expect(obs1?.title).toBe('Batch 1 obs');
       expect(obs2?.title).toBe('Batch 2 obs');

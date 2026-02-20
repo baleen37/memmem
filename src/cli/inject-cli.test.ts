@@ -13,8 +13,8 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 
 // Mock the modules
-vi.mock('../core/db.v3.js', () => ({
-  initDatabaseV3: vi.fn(),
+vi.mock('../core/db.js', () => ({
+  initDatabase: vi.fn(),
 }));
 
 vi.mock('../hooks/session-start.js', () => ({
@@ -22,7 +22,7 @@ vi.mock('../hooks/session-start.js', () => ({
 }));
 
 // Import mocked modules
-import { initDatabaseV3 } from '../core/db.v3.js';
+import { initDatabase } from '../core/db.js';
 import { handleSessionStart } from '../hooks/session-start.js';
 import type { SessionStartConfig, SessionStartResult } from '../hooks/session-start.js';
 
@@ -53,7 +53,7 @@ describe('Inject CLI', () => {
       all: vi.fn(),
     } as unknown as Database.Database;
 
-    (initDatabaseV3 as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+    (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
     // Store original env
     originalEnv = { ...process.env };
@@ -728,12 +728,12 @@ describe('Inject CLI', () => {
   });
 
   describe('database initialization', () => {
-    test('should initialize database using initDatabaseV3', () => {
-      (initDatabaseV3 as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+    test('should initialize database using initDatabase', () => {
+      (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-      const db = initDatabaseV3();
+      const db = initDatabase();
 
-      expect(initDatabaseV3).toHaveBeenCalled();
+      expect(initDatabase).toHaveBeenCalled();
       expect(db).toBe(mockDb);
     });
 

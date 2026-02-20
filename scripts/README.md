@@ -1,6 +1,6 @@
 # Scripts Directory
 
-Build, wrapper, and migration scripts for the memmem plugin.
+Build and wrapper scripts for the memmem plugin.
 
 ## Overview
 
@@ -8,7 +8,6 @@ This directory contains scripts for:
 
 - Building the plugin with esbuild
 - Wrapping executables with dependency checking
-- Migrating from v2 to v3 database schema
 
 ## Files
 
@@ -103,36 +102,6 @@ if (!installed) {
   await installDependencies(false); // with output
 }
 ```
-
-### migrate-v2-to-v3.mjs
-
-Interactive migration helper for upgrading from v2 to v3 database schema.
-
-**Usage:**
-
-```bash
-node scripts/migrate-v2-to-v3.mjs
-```
-
-**What it does:**
-
-1. Detects if a v2 database exists
-2. Validates schema structure (v2 vs v3 tables)
-3. Displays database statistics (exchange count, summary count)
-4. Provides step-by-step manual migration instructions
-
-**What it does NOT do:**
-
-- Automatically migrate data (schema changes are too significant)
-- Preserve v2 data in v3 format
-
-**Schema Differences:**
-
-| V2 Schema (deprecated) | V3 Schema (current) |
-| ---------------------- | ------------------- |
-| `exchanges` table | `observations` table |
-| `vec_exchanges` table | `vec_observations` table |
-| `session_summaries` table | `pending_events` table |
 
 ---
 

@@ -15,10 +15,10 @@ import Database from 'better-sqlite3';
 import type { LLMProvider } from '../core/llm/index.js';
 
 // Mock the modules
-vi.mock('../core/db.v3.js', () => ({
-  initDatabaseV3: vi.fn(),
-  getAllPendingEventsV3: vi.fn(),
-  getObservationV3: vi.fn(),
+vi.mock('../core/db.js', () => ({
+  initDatabase: vi.fn(),
+  getAllPendingEvents: vi.fn(),
+  getObservation: vi.fn(),
 }));
 
 vi.mock('../hooks/post-tool-use.js', () => ({
@@ -35,7 +35,7 @@ vi.mock('../core/llm/config.js', () => ({
 }));
 
 // Import mocked modules
-import { initDatabaseV3 } from '../core/db.v3.js';
+import { initDatabase } from '../core/db.js';
 import { handlePostToolUse } from '../hooks/post-tool-use.js';
 import { handleStop } from '../hooks/stop.js';
 import { loadConfig, createProvider } from '../core/llm/index.js';
@@ -55,7 +55,7 @@ describe('Observe CLI', () => {
       all: vi.fn(),
     } as unknown as Database.Database;
 
-    (initDatabaseV3 as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+    (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
     // Store original argv and env
     originalArgv = process.argv;
@@ -416,12 +416,12 @@ describe('Observe CLI', () => {
   });
 
   describe('Database integration', () => {
-    test('should initialize database using initDatabaseV3', () => {
-      (initDatabaseV3 as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+    test('should initialize database using initDatabase', () => {
+      (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-      const db = initDatabaseV3();
+      const db = initDatabase();
 
-      expect(initDatabaseV3).toHaveBeenCalled();
+      expect(initDatabase).toHaveBeenCalled();
       expect(db).toBe(mockDb);
     });
 
