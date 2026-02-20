@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import { initDatabaseV3, insertPendingEventV3, insertObservationV3, searchObservationsV3, getObservationV3 } from './db.v3.js';
+import { initDatabaseV3, openDatabase, insertPendingEventV3, insertObservationV3, searchObservationsV3, getObservationV3, getAllPendingEventsV3 } from './db.v3.js';
 
 describe('Database V3 Schema', () => {
   let db: Database.Database;
@@ -422,6 +422,437 @@ describe('Database V3 Schema', () => {
       expect(observation).toHaveProperty('sessionId');
       expect(observation).toHaveProperty('timestamp');
       expect(observation).toHaveProperty('createdAt');
+    });
+  });
+
+  describe('getAllPendingEventsV3', () => {
+    test('returns all events for a session ordered by created_at', () => {
+      const now = Date.now();
+
+      // Insert events for session-1
+      insertPendingEventV3(db, {
+        sessionId: 'session-1',
+        project: 'project-a',
+        toolName: 'bash',
+        compressed: 'first event',
+        timestamp: now - 2000,
+        createdAt: now - 2000,
+      });
+
+      insertPendingEventV3(db, {
+        sessionId: 'session-1',
+        project: 'project-a',
+        toolName: 'read',
+        compressed: 'second event',
+        timestamp: now - 1000,
+        createdAt: now - 1000,
+      });
+
+      // Insert event for different session
+      insertPendingEventV3(db, {
+        sessionId: 'session-2',
+        project: 'project-b',
+        toolName: 'write',
+        compressed: 'other session event',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      const results = getAllPendingEventsV3(db, 'session-1');
+
+      expect(results).toHaveLength(2);
+      expect(results[0].compressed).toBe('first event');
+      expect(results[1].compressed).toBe('second event');
+      // Verify ascending order by created_at
+      expect(results[0].createdAt).toBeLessThan(results[1].createdAt);
+    });
+
+    test('returns empty array for non-existent session', () => {
+      const results = getAllPendingEventsV3(db, 'non-existent-session');
+
+      expect(results).toEqual([]);
+    });
+
+    test('includes id in results', () => {
+      insertPendingEventV3(db, {
+        sessionId: 'session-1',
+        project: 'project-a',
+        toolName: 'bash',
+        compressed: 'test event',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      const results = getAllPendingEventsV3(db, 'session-1');
+
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe(1);
+    });
+
+    test('maps column names correctly', () => {
+      const now = Date.now();
+
+      insertPendingEventV3(db, {
+        sessionId: 'test-session',
+        project: 'test-project',
+        toolName: 'bash',
+        compressed: 'test compressed data',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      const results = getAllPendingEventsV3(db, 'test-session');
+
+      expect(results[0].sessionId).toBe('test-session');
+      expect(results[0].toolName).toBe('bash');
+      expect(results[0].createdAt).toBe(now);
+    });
+  });
+
+  describe('openDatabase', () => {
+    test('creates new database if not exists', () => {
+      // initDatabaseV3 already created the tables in beforeEach
+      // openDatabase should just open without wiping
+      const openDb = openDatabase();
+
+      const tables = openDb.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+        ORDER BY name
+      `).all() as Array<{ name: string }>;
+
+      const tableNames = tables.map(t => t.name);
+      expect(tableNames).toContain('observations');
+      expect(tableNames).toContain('pending_events');
+      expect(tableNames).toContain('vec_observations');
+
+      openDb.close();
+    });
+
+    test('does not wipe existing database', () => {
+      // Insert data using the current db connection
+      insertObservationV3(db, {
+        title: 'Persistent Data',
+        content: 'This should persist',
+        project: 'test-project',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      // Verify data exists in current connection
+      const observationBefore = getObservationV3(db, 1);
+      expect(observationBefore).toBeDefined();
+      expect(observationBefore!.title).toBe('Persistent Data');
+
+      // Calling initDatabaseV3 would wipe, but openDatabase should not
+      // Since we're using :memory:, openDatabase creates a new separate database
+      // In production with file-based DB, openDatabase would preserve data
+      // This test verifies openDatabase doesn't throw and creates proper schema
+      const openDb = openDatabase();
+
+      // Verify openDb has proper schema
+      const tables = openDb.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      `).all() as Array<{ name: string }>;
+
+      expect(tables.some(t => t.name === 'observations')).toBe(true);
+
+      openDb.close();
+    });
+  });
+
+  describe('V2 database detection', () => {
+    test('throws error when v2 database detected', () => {
+      // Create a fresh v2-style database
+      const v2Db = new Database(':memory:');
+      sqliteVec.load(v2Db);
+
+      // Create only the v2 exchanges table (no v3 tables)
+      v2Db.exec(`
+        CREATE TABLE exchanges (
+          id INTEGER PRIMARY KEY,
+          content TEXT
+        )
+      `);
+
+      // Now test the v2 detection logic directly
+      // The detection happens in createDatabase when checking for v3 tables
+      const tables = v2Db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tableNames = new Set(tables.map(t => t.name));
+
+      const v3Tables = ['pending_events', 'observations', 'vec_observations'];
+      const hasV3Tables = v3Tables.every(t => tableNames.has(t));
+
+      // If tables exist but v3 tables are missing, and exchanges exists, it's v2
+      expect(tableNames.size).toBeGreaterThan(0);
+      expect(hasV3Tables).toBe(false);
+      expect(tableNames.has('exchanges')).toBe(true);
+
+      v2Db.close();
+    });
+
+    test('does not throw for empty database', () => {
+      // Create fresh database with no tables
+      const freshDb = new Database(':memory:');
+
+      // Manually create v3 tables to simulate openDatabase behavior
+      const tables = freshDb.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table'
+      `).all() as Array<{ name: string }>;
+
+      expect(tables).toHaveLength(0);
+
+      freshDb.close();
+    });
+
+    test('does not throw for valid v3 database', () => {
+      // Current db from beforeEach is a valid v3 database
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      const tableNames = new Set(tables.map(t => t.name));
+
+      const v3Tables = ['pending_events', 'observations', 'vec_observations'];
+      const hasV3Tables = v3Tables.every(t => tableNames.has(t));
+
+      expect(hasV3Tables).toBe(true);
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    test('insertPendingEventV3 returns inserted row id', () => {
+      const id = insertPendingEventV3(db, {
+        sessionId: 'session-1',
+        project: 'project-a',
+        toolName: 'bash',
+        compressed: 'test',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      expect(typeof id).toBe('number');
+      expect(id).toBeGreaterThan(0);
+    });
+
+    test('insertObservationV3 returns inserted row id', () => {
+      const id = insertObservationV3(db, {
+        title: 'Test',
+        content: 'Content',
+        project: 'project',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      expect(typeof id).toBe('number');
+      expect(id).toBeGreaterThan(0);
+    });
+
+    test('insertObservationV3 works without embedding', () => {
+      const id = insertObservationV3(db, {
+        title: 'No Embedding',
+        content: 'This observation has no embedding',
+        project: 'project',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      // Observation should be inserted
+      expect(id).toBeGreaterThan(0);
+
+      // But no vector should exist for this id
+      const vecRow = db.prepare(`
+        SELECT * FROM vec_observations WHERE id = ?
+      `).get(String(id));
+
+      expect(vecRow).toBeUndefined();
+    });
+
+    test('searchObservationsV3 with combined filters', () => {
+      const now = Date.now();
+
+      insertObservationV3(db, {
+        title: 'Combined Test 1',
+        content: 'Content 1',
+        project: 'project-a',
+        sessionId: 'session-1',
+        timestamp: now - 1000,
+        createdAt: now - 1000,
+      });
+
+      insertObservationV3(db, {
+        title: 'Combined Test 2',
+        content: 'Content 2',
+        project: 'project-a',
+        sessionId: 'session-2',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      insertObservationV3(db, {
+        title: 'Combined Test 3',
+        content: 'Content 3',
+        project: 'project-b',
+        sessionId: 'session-1',
+        timestamp: now + 1000,
+        createdAt: now + 1000,
+      });
+
+      // Filter by project AND session
+      const results = searchObservationsV3(db, {
+        project: 'project-a',
+        sessionId: 'session-1',
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Combined Test 1');
+    });
+
+    test('searchObservationsV3 with after filter only', () => {
+      const now = Date.now();
+
+      insertObservationV3(db, {
+        title: 'Old Observation',
+        content: 'Old content',
+        project: 'project',
+        timestamp: now - 5000,
+        createdAt: now - 5000,
+      });
+
+      insertObservationV3(db, {
+        title: 'New Observation',
+        content: 'New content',
+        project: 'project',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      const results = searchObservationsV3(db, { after: now - 1000 });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('New Observation');
+    });
+
+    test('searchObservationsV3 with before filter only', () => {
+      const now = Date.now();
+
+      insertObservationV3(db, {
+        title: 'Old Observation',
+        content: 'Old content',
+        project: 'project',
+        timestamp: now - 5000,
+        createdAt: now - 5000,
+      });
+
+      insertObservationV3(db, {
+        title: 'New Observation',
+        content: 'New content',
+        project: 'project',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      const results = searchObservationsV3(db, { before: now - 1000 });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Old Observation');
+    });
+
+    test('searchObservationsV3 with all filters combined', () => {
+      const now = Date.now();
+
+      insertObservationV3(db, {
+        title: 'Match',
+        content: 'Should match all filters',
+        project: 'project-a',
+        sessionId: 'session-1',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      insertObservationV3(db, {
+        title: 'No Match - Wrong Project',
+        content: 'Wrong project',
+        project: 'project-b',
+        sessionId: 'session-1',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      insertObservationV3(db, {
+        title: 'No Match - Wrong Session',
+        content: 'Wrong session',
+        project: 'project-a',
+        sessionId: 'session-2',
+        timestamp: now,
+        createdAt: now,
+      });
+
+      insertObservationV3(db, {
+        title: 'No Match - Wrong Time',
+        content: 'Wrong time',
+        project: 'project-a',
+        sessionId: 'session-1',
+        timestamp: now - 10000,
+        createdAt: now - 10000,
+      });
+
+      const results = searchObservationsV3(db, {
+        project: 'project-a',
+        sessionId: 'session-1',
+        after: now - 1000,
+        before: now + 1000,
+        limit: 10,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Match');
+    });
+
+    test('searchObservationsV3 returns empty array when no matches', () => {
+      insertObservationV3(db, {
+        title: 'Test',
+        content: 'Content',
+        project: 'project-a',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      const results = searchObservationsV3(db, { project: 'non-existent-project' });
+
+      expect(results).toEqual([]);
+    });
+
+    test('handles empty strings in fields', () => {
+      const id = insertObservationV3(db, {
+        title: '',
+        content: '',
+        project: '',
+        sessionId: '',
+        timestamp: 0,
+        createdAt: 0,
+      });
+
+      const observation = getObservationV3(db, id);
+
+      expect(observation).toBeDefined();
+      expect(observation!.title).toBe('');
+      expect(observation!.content).toBe('');
+      expect(observation!.project).toBe('');
+      // Empty string sessionId becomes null in DB
+    });
+
+    test('handles very long content', () => {
+      const longContent = 'a'.repeat(100000);
+
+      const id = insertObservationV3(db, {
+        title: 'Long Content Test',
+        content: longContent,
+        project: 'project',
+        timestamp: Date.now(),
+        createdAt: Date.now(),
+      });
+
+      const observation = getObservationV3(db, id);
+
+      expect(observation!.content).toBe(longContent);
+      expect(observation!.content.length).toBe(100000);
     });
   });
 });

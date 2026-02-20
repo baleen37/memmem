@@ -8,7 +8,7 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { initDatabaseV3, insertObservationV3 } from './db.v3.js';
-import { search, type SearchOptions } from './search.v3.js';
+import { search } from './search.v3.js';
 
 // Global mock factory that can be controlled per test
 let mockGenerateEmbedding: (() => Promise<number[]>) | null = null;
@@ -184,8 +184,6 @@ describe('search.v3 - observation-only search', () => {
     });
 
     test('should filter by date range', async () => {
-      const now = Date.now();
-
       const oldDate = new Date('2025-01-10').getTime();
       const newDate = new Date('2025-01-20').getTime();
 
@@ -378,6 +376,320 @@ describe('search.v3 - observation-only search', () => {
       const results = await search('implementation', { db, files: ['file-a'] });
       expect(results.length).toBe(1);
       expect(results[0].title).toBe('File A implementation');
+    });
+  });
+
+  describe('search - date filters', () => {
+    test('should filter with only after date', async () => {
+      const oldDate = new Date('2025-01-10').getTime();
+      const newDate = new Date('2025-01-20').getTime();
+
+      insertTestObservation(db, {
+        title: 'Old observation',
+        content: 'Old content',
+        project: 'test-project',
+        timestamp: oldDate
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'New observation',
+        content: 'New content',
+        project: 'test-project',
+        timestamp: newDate
+      }, createTestEmbedding(2));
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('content', { db, after: '2025-01-15' });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('New observation');
+    });
+
+    test('should filter with only before date', async () => {
+      const oldDate = new Date('2025-01-10').getTime();
+      const newDate = new Date('2025-01-20').getTime();
+
+      insertTestObservation(db, {
+        title: 'Old observation',
+        content: 'Old content',
+        project: 'test-project',
+        timestamp: oldDate
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'New observation',
+        content: 'New content',
+        project: 'test-project',
+        timestamp: newDate
+      }, createTestEmbedding(2));
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('content', { db, before: '2025-01-15' });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Old observation');
+    });
+
+    test('should include boundary dates (inclusive)', async () => {
+      const boundaryDate = new Date('2025-01-15').getTime();
+
+      insertTestObservation(db, {
+        title: 'Boundary observation',
+        content: 'Boundary content',
+        project: 'test-project',
+        timestamp: boundaryDate
+      }, createTestEmbedding(1));
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('Boundary', {
+        db,
+        after: '2025-01-15',
+        before: '2025-01-15'
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Boundary observation');
+    });
+  });
+
+  describe('search - multiple project filter', () => {
+    beforeEach(() => {
+      const now = Date.now();
+
+      insertTestObservation(db, {
+        title: 'Project A task',
+        content: 'Task for project A',
+        project: 'project-a',
+        timestamp: now - 2000
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Project B task',
+        content: 'Task for project B',
+        project: 'project-b',
+        timestamp: now - 1000
+      }, createTestEmbedding(2));
+
+      insertTestObservation(db, {
+        title: 'Project C task',
+        content: 'Task for project C',
+        project: 'project-c',
+        timestamp: now
+      }, createTestEmbedding(3));
+    });
+
+    test('should filter by multiple projects', async () => {
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('task', { db, projects: ['project-a', 'project-c'] });
+
+      expect(results.length).toBe(2);
+      const projects = results.map(r => r.project);
+      expect(projects).toContain('project-a');
+      expect(projects).toContain('project-c');
+      expect(projects).not.toContain('project-b');
+    });
+
+    test('should return empty when no matching projects', async () => {
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('task', { db, projects: ['nonexistent-project'] });
+      expect(results.length).toBe(0);
+    });
+  });
+
+  describe('search - limit behavior', () => {
+    test('should use default limit of 10', async () => {
+      // Insert 15 observations
+      for (let i = 0; i < 15; i++) {
+        insertTestObservation(db, {
+          title: `Observation ${i}`,
+          content: `Content ${i}`,
+          project: 'test-project',
+          timestamp: Date.now() + i
+        }, createTestEmbedding(i));
+      }
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('Content', { db });
+      expect(results.length).toBe(10);
+    });
+
+    test('should return fewer results when not enough matches', async () => {
+      insertTestObservation(db, {
+        title: 'Single observation',
+        content: 'Single content',
+        project: 'test-project',
+        timestamp: Date.now()
+      }, createTestEmbedding(1));
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('Single', { db, limit: 10 });
+      expect(results.length).toBe(1);
+    });
+  });
+
+  describe('search - ordering', () => {
+    test('should order results by vector distance (most similar first)', async () => {
+      const now = Date.now();
+
+      // Insert observations with different embeddings
+      insertTestObservation(db, {
+        title: 'Similar observation',
+        content: 'Very similar content',
+        project: 'test-project',
+        timestamp: now - 2000
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Less similar observation',
+        content: 'Less similar content',
+        project: 'test-project',
+        timestamp: now
+      }, createTestEmbedding(100));
+
+      // Use embedding similar to first observation
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('similar', { db, limit: 2 });
+
+      // First result should be the most similar one (embedding seed 1)
+      expect(results[0].title).toBe('Similar observation');
+    });
+  });
+
+  describe('search - combined filters', () => {
+    test('should combine projects and date filters', async () => {
+      insertTestObservation(db, {
+        title: 'Old Project A',
+        content: 'Content old project A',
+        project: 'project-a',
+        timestamp: new Date('2025-01-10').getTime()
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'New Project A',
+        content: 'Content new project A',
+        project: 'project-a',
+        timestamp: new Date('2025-01-20').getTime()
+      }, createTestEmbedding(2));
+
+      insertTestObservation(db, {
+        title: 'New Project B',
+        content: 'Content new project B',
+        project: 'project-b',
+        timestamp: new Date('2025-01-20').getTime()
+      }, createTestEmbedding(3));
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('Content', {
+        db,
+        projects: ['project-a'],
+        after: '2025-01-15'
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('New Project A');
+    });
+
+    test('should combine files and projects filters', async () => {
+      insertTestObservation(db, {
+        title: 'Project A file',
+        content: 'Modified src/file.ts in project A',
+        project: 'project-a',
+        timestamp: Date.now()
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Project B file',
+        content: 'Modified src/file.ts in project B',
+        project: 'project-b',
+        timestamp: Date.now()
+      }, createTestEmbedding(2));
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('Modified', {
+        db,
+        projects: ['project-a'],
+        files: ['src/file.ts']
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].project).toBe('project-a');
+    });
+
+    test('should combine all filters together', async () => {
+      insertTestObservation(db, {
+        title: 'Match all filters',
+        content: 'Modified src/app.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-20').getTime()
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Wrong project',
+        content: 'Modified src/app.ts',
+        project: 'project-b',
+        timestamp: new Date('2025-01-20').getTime()
+      }, createTestEmbedding(2));
+
+      insertTestObservation(db, {
+        title: 'Wrong file',
+        content: 'Modified lib/util.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-20').getTime()
+      }, createTestEmbedding(3));
+
+      insertTestObservation(db, {
+        title: 'Wrong date',
+        content: 'Modified src/app.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-10').getTime()
+      }, createTestEmbedding(4));
+
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      const results = await search('Modified', {
+        db,
+        projects: ['project-a'],
+        files: ['src/app.ts'],
+        after: '2025-01-15',
+        limit: 5
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Match all filters');
+    });
+  });
+
+  describe('search - isoToTimestamp (via date filters)', () => {
+    test('should correctly convert ISO date to timestamp', async () => {
+      const specificDate = new Date('2025-06-15').getTime();
+
+      insertTestObservation(db, {
+        title: 'June observation',
+        content: 'June content',
+        project: 'test-project',
+        timestamp: specificDate
+      }, createTestEmbedding(1));
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      // Query with the exact date should include this observation
+      const results = await search('June', {
+        db,
+        after: '2025-06-15',
+        before: '2025-06-15'
+      });
+
+      expect(results.length).toBe(1);
     });
   });
 });
