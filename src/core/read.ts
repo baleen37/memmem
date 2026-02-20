@@ -140,6 +140,52 @@ export function getRoleLabel(type: 'user' | 'assistant', isSidechain: boolean): 
 }
 
 /**
+ * Format tool input parameters.
+ *
+ * @param input - Tool input object
+ * @returns Markdown formatted input parameters
+ */
+export function formatToolInput(input: Record<string, any>): string {
+  let output = '';
+
+  if (input && typeof input === 'object') {
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === 'string' && value.includes('\n')) {
+        output += `- **${key}:**\n\`\`\`\n${value}\n\`\`\`\n`;
+      } else if (typeof value === 'string') {
+        output += `- **${key}:** ${value}\n`;
+      } else {
+        output += `- **${key}:**\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n`;
+      }
+    }
+    output += '\n';
+  }
+
+  return output;
+}
+
+/**
+ * Format tool result content for display.
+ *
+ * @param content - Tool result content (string or array)
+ * @returns Markdown formatted result
+ */
+export function formatToolResultContent(content: string | any[]): string {
+  if (typeof content === 'string') {
+    if (content.includes('\n') || content.length > 100) {
+      return '```\n' + content + '\n```\n\n';
+    }
+    return `${content}\n\n`;
+  }
+
+  if (Array.isArray(content)) {
+    return '```json\n' + JSON.stringify(content, null, 2) + '\n```\n\n';
+  }
+
+  return '';
+}
+
+/**
  * Format JSONL conversation as markdown.
  *
  * @param jsonl - JSONL string containing conversation messages

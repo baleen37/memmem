@@ -10,7 +10,11 @@ import {
   formatTokenUsage,
   formatSidechainStart,
   formatSidechainEnd,
-  getRoleLabel
+  getRoleLabel,
+  findToolResult,
+  formatUserMessage,
+  formatToolInput,
+  formatToolResultContent
 } from './read.js';
 
 interface ConversationMessage {
@@ -490,5 +494,77 @@ describe('getRoleLabel()', () => {
   test('returns Subagent for sidechain assistant message', () => {
     const result = getRoleLabel('assistant', true);
     expect(result).toBe('Subagent');
+  });
+});
+
+describe('formatToolInput()', () => {
+  test('formats simple string value', () => {
+    const input = { file_path: '/path/to/file.txt' };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**file_path:** /path/to/file.txt');
+  });
+
+  test('formats multiline string in code block', () => {
+    const input = { code: 'line 1\nline 2\nline 3' };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**code:**');
+    expect(result).toContain('```');
+    expect(result).toContain('line 1');
+  });
+
+  test('formats object value as JSON', () => {
+    const input = { options: { verbose: true, count: 5 } };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**options:**');
+    expect(result).toContain('```json');
+    expect(result).toContain('"verbose"');
+  });
+
+  test('returns empty string for empty input', () => {
+    const result = formatToolInput({});
+
+    expect(result).toBe('\n');
+  });
+});
+
+describe('formatToolResultContent()', () => {
+  test('formats short single-line content inline', () => {
+    const result = formatToolResultContent('Short result');
+
+    expect(result).toBe('Short result\n\n');
+  });
+
+  test('formats long content in code block', () => {
+    const longContent = 'A'.repeat(150);
+
+    const result = formatToolResultContent(longContent);
+
+    expect(result).toContain('```');
+    expect(result).toContain(longContent);
+  });
+
+  test('formats multiline content in code block', () => {
+    const multiline = 'Line 1\nLine 2\nLine 3';
+
+    const result = formatToolResultContent(multiline);
+
+    expect(result).toContain('```');
+    expect(result).toContain('Line 1');
+    expect(result).toContain('Line 2');
+  });
+
+  test('formats array content as JSON', () => {
+    const content = [{ foo: 'bar' }, { baz: 'qux' }];
+
+    const result = formatToolResultContent(content);
+
+    expect(result).toContain('```json');
+    expect(result).toContain('"foo"');
   });
 });
