@@ -5,8 +5,29 @@ import { join } from 'path';
 import { existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import {
   readConversation,
-  formatConversationAsMarkdown
+  formatConversationAsMarkdown,
+  filterValidMessages,
+  formatTokenUsage,
+  formatSidechainStart,
+  formatSidechainEnd,
+  getRoleLabel
 } from './read.js';
+
+interface ConversationMessage {
+  uuid: string;
+  parentUuid: string | null;
+  timestamp: string;
+  type: 'user' | 'assistant';
+  isSidechain: boolean;
+  message: {
+    role: string;
+    content: string | Array<{ type: string; text?: string; id?: string; name?: string; input?: any }>;
+    usage?: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+  };
+}
 
 describe('read.ts', () => {
   let db: Database.Database;
@@ -314,5 +335,160 @@ describe('read.ts', () => {
       expect(result).toContain('Sidechain user');
       expect(result).toContain('Sidechain agent');
     });
+  });
+});
+
+describe('filterValidMessages()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('keeps user and assistant messages', () => {
+    const messages = [
+      createMsg({ type: 'user' }),
+      createMsg({ type: 'assistant' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(2);
+  });
+
+  test('filters out system messages', () => {
+    const messages = [
+      createMsg({ type: 'system' as any }),
+      createMsg({ type: 'user' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('user');
+  });
+
+  test('filters out messages without timestamp', () => {
+    const messages = [
+      createMsg({ timestamp: '' as any }),
+      createMsg({ type: 'user' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+  });
+
+  test('keeps assistant messages with only usage info', () => {
+    const messages = [
+      createMsg({
+        type: 'assistant',
+        message: { role: 'assistant', content: '', usage: { input_tokens: 10, output_tokens: 5 } }
+      })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+  });
+
+  test('filters out messages with empty content array', () => {
+    const messages = [
+      createMsg({
+        type: 'user',
+        message: { role: 'user', content: [] }
+      })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('formatTokenUsage()', () => {
+  test('formats basic usage', () => {
+    const usage = { input_tokens: 100, output_tokens: 50 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('in: 100');
+    expect(result).toContain('out: 50');
+  });
+
+  test('formats cache read tokens', () => {
+    const usage = { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 80 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('cache read: 80');
+  });
+
+  test('formats cache creation tokens', () => {
+    const usage = { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 20 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('cache create: 20');
+  });
+
+  test('formats all token types together', () => {
+    const usage = {
+      input_tokens: 1000,
+      output_tokens: 500,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 200
+    };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('in: 1,000');
+    expect(result).toContain('cache read: 800');
+    expect(result).toContain('cache create: 200');
+    expect(result).toContain('out: 500');
+  });
+});
+
+describe('formatSidechainStart()', () => {
+  test('returns sidechain start marker', () => {
+    const result = formatSidechainStart();
+
+    expect(result).toContain('SIDECHAIN START');
+    expect(result).toContain('---');
+  });
+});
+
+describe('formatSidechainEnd()', () => {
+  test('returns sidechain end marker', () => {
+    const result = formatSidechainEnd();
+
+    expect(result).toContain('SIDECHAIN END');
+    expect(result).toContain('---');
+  });
+});
+
+describe('getRoleLabel()', () => {
+  test('returns User for non-sidechain user message', () => {
+    const result = getRoleLabel('user', false);
+    expect(result).toBe('User');
+  });
+
+  test('returns Agent for non-sidechain assistant message', () => {
+    const result = getRoleLabel('assistant', false);
+    expect(result).toBe('Agent');
+  });
+
+  test('returns Agent for sidechain user message', () => {
+    const result = getRoleLabel('user', true);
+    expect(result).toBe('Agent');
+  });
+
+  test('returns Subagent for sidechain assistant message', () => {
+    const result = getRoleLabel('assistant', true);
+    expect(result).toBe('Subagent');
   });
 });

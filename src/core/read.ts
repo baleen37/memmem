@@ -34,6 +34,31 @@ interface ConversationMessage {
 }
 
 /**
+ * Format token usage information.
+ *
+ * @param usage - Token usage object
+ * @returns Markdown formatted usage string
+ */
+export function formatTokenUsage(usage: {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}): string {
+  let output = `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
+
+  if (usage.cache_read_input_tokens) {
+    output += ` | cache read: ${usage.cache_read_input_tokens.toLocaleString()}`;
+  }
+  if (usage.cache_creation_input_tokens) {
+    output += ` | cache create: ${usage.cache_creation_input_tokens.toLocaleString()}`;
+  }
+
+  output += ` | out: ${(usage.output_tokens || 0).toLocaleString()}_\n\n`;
+  return output;
+}
+
+/**
  * Read conversation from JSONL file.
  *
  * In V3, conversations are read directly from JSONL files.
@@ -57,6 +82,29 @@ export function readConversation(
   // Read and format JSONL file
   const jsonlContent = fs.readFileSync(path, 'utf-8');
   return formatConversationAsMarkdown(jsonlContent, startLine, endLine);
+}
+
+/**
+ * Filter out invalid messages (system, no timestamp, no content).
+ * Keeps assistant messages that have usage info even without content.
+ *
+ * @param messages - Array of conversation messages
+ * @returns Filtered array of valid messages
+ */
+export function filterValidMessages(messages: ConversationMessage[]): ConversationMessage[] {
+  return messages.filter(msg => {
+    if (msg.type !== 'user' && msg.type !== 'assistant') return false;
+    if (!msg.timestamp) return false;
+    if (!msg.message || !msg.message.content) {
+      if (msg.type === 'assistant' && msg.message?.usage) return true;
+      return false;
+    }
+    if (Array.isArray(msg.message.content) && msg.message.content.length === 0) {
+      if (msg.type === 'assistant' && msg.message?.usage) return true;
+      return false;
+    }
+    return true;
+  });
 }
 
 /**
@@ -85,19 +133,7 @@ export function formatConversationAsMarkdown(
   const allMessages: ConversationMessage[] = lines.map(line => JSON.parse(line));
 
   // Filter out system messages and messages with no content
-  const messages = allMessages.filter(msg => {
-    if (msg.type !== 'user' && msg.type !== 'assistant') return false;
-    if (!msg.timestamp) return false;
-    if (!msg.message || !msg.message.content) {
-      if (msg.type === 'assistant' && msg.message?.usage) return true;
-      return false;
-    }
-    if (Array.isArray(msg.message.content) && msg.message.content.length === 0) {
-      if (msg.type === 'assistant' && msg.message?.usage) return true;
-      return false;
-    }
-    return true;
-  });
+  const messages = filterValidMessages(allMessages);
 
   if (messages.length === 0) {
     return '';
