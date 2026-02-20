@@ -5,8 +5,40 @@ import { join } from 'path';
 import { existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import {
   readConversation,
-  formatConversationAsMarkdown
+  formatConversationAsMarkdown,
+  parseJsonlMessages,
+  filterValidMessages,
+  formatMetadata,
+  formatTokenUsage,
+  formatSidechainStart,
+  formatSidechainEnd,
+  getRoleLabel,
+  findToolResult,
+  formatUserMessage,
+  formatToolInput,
+  formatToolResultContent
 } from './read.js';
+
+interface ConversationMessage {
+  uuid: string;
+  parentUuid: string | null;
+  timestamp: string;
+  type: 'user' | 'assistant';
+  isSidechain: boolean;
+  sessionId?: string;
+  gitBranch?: string;
+  cwd?: string;
+  version?: string;
+  message: {
+    role: string;
+    content: string | Array<{ type: string; text?: string; id?: string; name?: string; input?: any }>;
+    usage?: {
+      input_tokens: number;
+      output_tokens: number;
+    };
+  };
+  toolUseResult?: Array<{ type: string; text: string }> | string;
+}
 
 describe('read.ts', () => {
   let db: Database.Database;
@@ -314,5 +346,466 @@ describe('read.ts', () => {
       expect(result).toContain('Sidechain user');
       expect(result).toContain('Sidechain agent');
     });
+  });
+});
+
+describe('filterValidMessages()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('keeps user and assistant messages', () => {
+    const messages = [
+      createMsg({ type: 'user' }),
+      createMsg({ type: 'assistant' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(2);
+  });
+
+  test('filters out system messages', () => {
+    const messages = [
+      createMsg({ type: 'system' as any }),
+      createMsg({ type: 'user' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('user');
+  });
+
+  test('filters out messages without timestamp', () => {
+    const messages = [
+      createMsg({ timestamp: '' as any }),
+      createMsg({ type: 'user' })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+  });
+
+  test('keeps assistant messages with only usage info', () => {
+    const messages = [
+      createMsg({
+        type: 'assistant',
+        message: { role: 'assistant', content: '', usage: { input_tokens: 10, output_tokens: 5 } }
+      })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(1);
+  });
+
+  test('filters out messages with empty content array', () => {
+    const messages = [
+      createMsg({
+        type: 'user',
+        message: { role: 'user', content: [] }
+      })
+    ];
+
+    const result = filterValidMessages(messages);
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('formatTokenUsage()', () => {
+  test('formats basic usage', () => {
+    const usage = { input_tokens: 100, output_tokens: 50 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('in: 100');
+    expect(result).toContain('out: 50');
+  });
+
+  test('formats cache read tokens', () => {
+    const usage = { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 80 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('cache read: 80');
+  });
+
+  test('formats cache creation tokens', () => {
+    const usage = { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 20 };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('cache create: 20');
+  });
+
+  test('formats all token types together', () => {
+    const usage = {
+      input_tokens: 1000,
+      output_tokens: 500,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 200
+    };
+
+    const result = formatTokenUsage(usage);
+
+    expect(result).toContain('in: 1,000');
+    expect(result).toContain('cache read: 800');
+    expect(result).toContain('cache create: 200');
+    expect(result).toContain('out: 500');
+  });
+});
+
+describe('formatSidechainStart()', () => {
+  test('returns sidechain start marker', () => {
+    const result = formatSidechainStart();
+
+    expect(result).toContain('SIDECHAIN START');
+    expect(result).toContain('---');
+  });
+});
+
+describe('formatSidechainEnd()', () => {
+  test('returns sidechain end marker', () => {
+    const result = formatSidechainEnd();
+
+    expect(result).toContain('SIDECHAIN END');
+    expect(result).toContain('---');
+  });
+});
+
+describe('getRoleLabel()', () => {
+  test('returns User for non-sidechain user message', () => {
+    const result = getRoleLabel('user', false);
+    expect(result).toBe('User');
+  });
+
+  test('returns Agent for non-sidechain assistant message', () => {
+    const result = getRoleLabel('assistant', false);
+    expect(result).toBe('Agent');
+  });
+
+  test('returns Agent for sidechain user message', () => {
+    const result = getRoleLabel('user', true);
+    expect(result).toBe('Agent');
+  });
+
+  test('returns Subagent for sidechain assistant message', () => {
+    const result = getRoleLabel('assistant', true);
+    expect(result).toBe('Subagent');
+  });
+});
+
+describe('formatToolInput()', () => {
+  test('formats simple string value', () => {
+    const input = { file_path: '/path/to/file.txt' };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**file_path:** /path/to/file.txt');
+  });
+
+  test('formats multiline string in code block', () => {
+    const input = { code: 'line 1\nline 2\nline 3' };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**code:**');
+    expect(result).toContain('```');
+    expect(result).toContain('line 1');
+  });
+
+  test('formats object value as JSON', () => {
+    const input = { options: { verbose: true, count: 5 } };
+
+    const result = formatToolInput(input);
+
+    expect(result).toContain('**options:**');
+    expect(result).toContain('```json');
+    expect(result).toContain('"verbose"');
+  });
+
+  test('returns empty string for empty input', () => {
+    const result = formatToolInput({});
+
+    expect(result).toBe('\n');
+  });
+});
+
+describe('formatToolResultContent()', () => {
+  test('formats short single-line content inline', () => {
+    const result = formatToolResultContent('Short result');
+
+    expect(result).toBe('Short result\n\n');
+  });
+
+  test('formats long content in code block', () => {
+    const longContent = 'A'.repeat(150);
+
+    const result = formatToolResultContent(longContent);
+
+    expect(result).toContain('```');
+    expect(result).toContain(longContent);
+  });
+
+  test('formats multiline content in code block', () => {
+    const multiline = 'Line 1\nLine 2\nLine 3';
+
+    const result = formatToolResultContent(multiline);
+
+    expect(result).toContain('```');
+    expect(result).toContain('Line 1');
+    expect(result).toContain('Line 2');
+  });
+
+  test('formats array content as JSON', () => {
+    const content = [{ foo: 'bar' }, { baz: 'qux' }];
+
+    const result = formatToolResultContent(content);
+
+    expect(result).toContain('```json');
+    expect(result).toContain('"foo"');
+  });
+});
+
+describe('findToolResult()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('finds tool result by tool_use_id', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      }),
+      createMsg({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Some text' },
+            { type: 'tool_result', tool_use_id: 'tool-123', content: 'File contents' } as any
+          ]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).not.toBeNull();
+    expect((result as any).content).toBe('File contents');
+  });
+
+  test('returns null when tool result not found', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).toBeNull();
+  });
+
+  test('only searches within 6 messages ahead', () => {
+    const messages: ConversationMessage[] = [
+      createMsg({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-123', name: 'read', input: {} }]
+        }
+      }),
+      ...Array(6).fill(null).map((_, i) =>
+        createMsg({ uuid: `msg-${i}`, type: 'user', message: { role: 'user', content: `msg ${i}` } })
+      ),
+      createMsg({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tool-123', content: 'Too far' } as any]
+        }
+      })
+    ];
+
+    const result = findToolResult(messages, 0, 'tool-123');
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('formatUserMessage()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('formats string content', () => {
+    const msg = createMsg({ message: { role: 'user', content: 'Hello world' } });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toBe('Hello world\n\n');
+  });
+
+  test('formats text blocks from array content', () => {
+    const msg = createMsg({
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'First part' },
+          { type: 'text', text: 'Second part' }
+        ]
+      }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('First part');
+    expect(result).toContain('Second part');
+  });
+
+  test('formats toolUseResult string', () => {
+    const msg = createMsg({
+      toolUseResult: 'Tool result here',
+      message: { role: 'user', content: '' }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('**Tool Result:**');
+    expect(result).toContain('Tool result here');
+  });
+
+  test('formats toolUseResult array', () => {
+    const msg = createMsg({
+      toolUseResult: [{ type: 'text', text: 'Result 1' }, { type: 'text', text: 'Result 2' }],
+      message: { role: 'user', content: '' }
+    });
+
+    const result = formatUserMessage(msg);
+
+    expect(result).toContain('Result 1');
+    expect(result).toContain('Result 2');
+  });
+});
+
+describe('parseJsonlMessages()', () => {
+  test('parses valid JSONL into messages array', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'Hello' } }),
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'Hi' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].uuid).toBe('1');
+    expect(result[1].uuid).toBe('2');
+  });
+
+  test('filters out empty lines', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'Hello' } }),
+      '',
+      '   ',
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'Hi' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl);
+
+    expect(result).toHaveLength(2);
+  });
+
+  test('applies line range with 1-indexed line numbers', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'A' } }),
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'B' } }),
+      JSON.stringify({ uuid: '3', type: 'user', timestamp: '2024-01-01T00:00:02Z', message: { role: 'user', content: 'C' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl, 2, 3);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].uuid).toBe('2');
+    expect(result[1].uuid).toBe('3');
+  });
+});
+
+describe('formatMetadata()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('formats all metadata fields', () => {
+    const msg = createMsg({
+      sessionId: 'session-123',
+      gitBranch: 'feature-branch',
+      cwd: '/home/user/project',
+      version: '2.0.0'
+    });
+
+    const result = formatMetadata(msg);
+
+    expect(result).toContain('## Metadata');
+    expect(result).toContain('**Session ID:** session-123');
+    expect(result).toContain('**Git Branch:** feature-branch');
+    expect(result).toContain('**Working Directory:** /home/user/project');
+    expect(result).toContain('**Claude Code Version:** 2.0.0');
+  });
+
+  test('omits missing metadata fields', () => {
+    const msg = createMsg({
+      sessionId: 'session-123'
+    });
+
+    const result = formatMetadata(msg);
+
+    expect(result).toContain('**Session ID:** session-123');
+    expect(result).not.toContain('**Git Branch:**');
+    expect(result).not.toContain('**Working Directory:**');
+    expect(result).not.toContain('**Claude Code Version:**');
+  });
+
+  test('returns header only when no metadata present', () => {
+    const msg = createMsg();
+
+    const result = formatMetadata(msg);
+
+    expect(result).toBe('## Metadata\n\n---\n\n');
   });
 });

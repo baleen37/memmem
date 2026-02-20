@@ -34,6 +34,83 @@ interface ConversationMessage {
 }
 
 /**
+ * Format token usage information.
+ *
+ * @param usage - Token usage object
+ * @returns Markdown formatted usage string
+ */
+export function formatTokenUsage(usage: {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}): string {
+  let output = `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
+
+  if (usage.cache_read_input_tokens) {
+    output += ` | cache read: ${usage.cache_read_input_tokens.toLocaleString()}`;
+  }
+  if (usage.cache_creation_input_tokens) {
+    output += ` | cache create: ${usage.cache_creation_input_tokens.toLocaleString()}`;
+  }
+
+  output += ` | out: ${(usage.output_tokens || 0).toLocaleString()}_\n\n`;
+  return output;
+}
+
+/**
+ * Parse JSONL string into array of conversation messages.
+ * Optionally filters by line range (1-indexed, inclusive).
+ *
+ * @param jsonl - JSONL string containing conversation messages
+ * @param startLine - Starting line number (1-indexed, inclusive)
+ * @param endLine - Ending line number (1-indexed, inclusive)
+ * @returns Array of parsed messages
+ */
+export function parseJsonlMessages(
+  jsonl: string,
+  startLine?: number,
+  endLine?: number
+): ConversationMessage[] {
+  const allLines = jsonl.trim().split('\n').filter(line => line.trim());
+
+  const lines = startLine !== undefined || endLine !== undefined
+    ? allLines.slice(
+        startLine !== undefined ? startLine - 1 : 0,
+        endLine !== undefined ? endLine : undefined
+      )
+    : allLines;
+
+  return lines.map(line => JSON.parse(line));
+}
+
+/**
+ * Format conversation metadata from first message.
+ *
+ * @param firstMessage - First message in conversation
+ * @returns Markdown formatted metadata section
+ */
+export function formatMetadata(firstMessage: ConversationMessage): string {
+  let output = '## Metadata\n\n';
+
+  if (firstMessage.sessionId) {
+    output += `**Session ID:** ${firstMessage.sessionId}\n\n`;
+  }
+  if (firstMessage.gitBranch) {
+    output += `**Git Branch:** ${firstMessage.gitBranch}\n\n`;
+  }
+  if (firstMessage.cwd) {
+    output += `**Working Directory:** ${firstMessage.cwd}\n\n`;
+  }
+  if (firstMessage.version) {
+    output += `**Claude Code Version:** ${firstMessage.version}\n\n`;
+  }
+
+  output += '---\n\n';
+  return output;
+}
+
+/**
  * Read conversation from JSONL file.
  *
  * In V3, conversations are read directly from JSONL files.
@@ -60,32 +137,14 @@ export function readConversation(
 }
 
 /**
- * Format JSONL conversation as markdown.
+ * Filter out invalid messages (system, no timestamp, no content).
+ * Keeps assistant messages that have usage info even without content.
  *
- * @param jsonl - JSONL string containing conversation messages
- * @param startLine - Starting line number (1-indexed, inclusive)
- * @param endLine - Ending line number (1-indexed, inclusive)
- * @returns Markdown formatted conversation
+ * @param messages - Array of conversation messages
+ * @returns Filtered array of valid messages
  */
-export function formatConversationAsMarkdown(
-  jsonl: string,
-  startLine?: number,
-  endLine?: number
-): string {
-  const allLines = jsonl.trim().split('\n').filter(line => line.trim());
-
-  // Apply line range if specified (1-indexed, inclusive)
-  const lines = startLine !== undefined || endLine !== undefined
-    ? allLines.slice(
-        startLine !== undefined ? startLine - 1 : 0,
-        endLine !== undefined ? endLine : undefined
-      )
-    : allLines;
-
-  const allMessages: ConversationMessage[] = lines.map(line => JSON.parse(line));
-
-  // Filter out system messages and messages with no content
-  const messages = allMessages.filter(msg => {
+export function filterValidMessages(messages: ConversationMessage[]): ConversationMessage[] {
+  return messages.filter(msg => {
     if (msg.type !== 'user' && msg.type !== 'assistant') return false;
     if (!msg.timestamp) return false;
     if (!msg.message || !msg.message.content) {
@@ -98,30 +157,179 @@ export function formatConversationAsMarkdown(
     }
     return true;
   });
+}
+
+/**
+ * Format sidechain start marker.
+ *
+ * @returns Markdown formatted sidechain start
+ */
+export function formatSidechainStart(): string {
+  return '\n---\n**🔀 SIDECHAIN START**\n---\n\n';
+}
+
+/**
+ * Format sidechain end marker.
+ *
+ * @returns Markdown formatted sidechain end
+ */
+export function formatSidechainEnd(): string {
+  return '\n---\n**🔀 SIDECHAIN END**\n---\n\n';
+}
+
+/**
+ * Get role label based on message type and sidechain status.
+ *
+ * @param type - Message type (user or assistant)
+ * @param isSidechain - Whether message is in sidechain
+ * @returns Human-readable role label
+ */
+export function getRoleLabel(type: 'user' | 'assistant', isSidechain: boolean): string {
+  if (isSidechain) {
+    return type === 'user' ? 'Agent' : 'Subagent';
+  }
+  return type === 'user' ? 'User' : 'Agent';
+}
+
+/**
+ * Format tool input parameters.
+ *
+ * @param input - Tool input object
+ * @returns Markdown formatted input parameters
+ */
+export function formatToolInput(input: Record<string, any>): string {
+  let output = '';
+
+  if (input && typeof input === 'object') {
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === 'string' && value.includes('\n')) {
+        output += `- **${key}:**\n\`\`\`\n${value}\n\`\`\`\n`;
+      } else if (typeof value === 'string') {
+        output += `- **${key}:** ${value}\n`;
+      } else {
+        output += `- **${key}:**\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n`;
+      }
+    }
+    output += '\n';
+  }
+
+  return output;
+}
+
+/**
+ * Format tool result content for display.
+ *
+ * @param content - Tool result content (string or array)
+ * @returns Markdown formatted result
+ */
+export function formatToolResultContent(content: string | any[]): string {
+  if (typeof content === 'string') {
+    if (content.includes('\n') || content.length > 100) {
+      return '```\n' + content + '\n```\n\n';
+    }
+    return `${content}\n\n`;
+  }
+
+  if (Array.isArray(content)) {
+    return '```json\n' + JSON.stringify(content, null, 2) + '\n```\n\n';
+  }
+
+  return '';
+}
+
+interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string | any[];
+}
+
+/**
+ * Find tool result in messages following a tool use.
+ * Searches up to 6 messages ahead for matching tool_use_id.
+ *
+ * @param messages - All conversation messages
+ * @param toolUseIndex - Index of the message containing tool use
+ * @param toolUseId - ID of the tool use to match
+ * @returns Tool result block or null if not found
+ */
+export function findToolResult(
+  messages: ConversationMessage[],
+  toolUseIndex: number,
+  toolUseId: string
+): ToolResultBlock | null {
+  for (let j = toolUseIndex + 1; j < Math.min(toolUseIndex + 6, messages.length); j++) {
+    const laterMsg = messages[j];
+    if (laterMsg.type === 'user' && Array.isArray(laterMsg.message.content)) {
+      for (const resultBlock of laterMsg.message.content) {
+        if (resultBlock.type === 'tool_result' && (resultBlock as any).tool_use_id === toolUseId) {
+          return resultBlock as ToolResultBlock;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Format user message content.
+ *
+ * @param msg - User message to format
+ * @returns Markdown formatted message content
+ */
+export function formatUserMessage(msg: ConversationMessage): string {
+  let output = '';
+
+  // Handle tool results
+  if (msg.toolUseResult) {
+    output += '**Tool Result:**\n\n';
+    if (typeof msg.toolUseResult === 'string') {
+      output += `${msg.toolUseResult}\n\n`;
+    } else if (Array.isArray(msg.toolUseResult)) {
+      for (const result of msg.toolUseResult) {
+        output += `${(result as any).text || String(result)}\n\n`;
+      }
+    }
+    return output;
+  }
+
+  // Handle regular content
+  if (typeof msg.message.content === 'string') {
+    output += `${msg.message.content}\n\n`;
+  } else if (Array.isArray(msg.message.content)) {
+    for (const block of msg.message.content) {
+      if (block.type === 'text' && block.text) {
+        output += `${block.text}\n\n`;
+      }
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Format JSONL conversation as markdown.
+ *
+ * @param jsonl - JSONL string containing conversation messages
+ * @param startLine - Starting line number (1-indexed, inclusive)
+ * @param endLine - Ending line number (1-indexed, inclusive)
+ * @returns Markdown formatted conversation
+ */
+export function formatConversationAsMarkdown(
+  jsonl: string,
+  startLine?: number,
+  endLine?: number
+): string {
+  // Parse and filter messages using extracted functions
+  const allMessages = parseJsonlMessages(jsonl, startLine, endLine);
+  const messages = filterValidMessages(allMessages);
 
   if (messages.length === 0) {
     return '';
   }
 
-  const firstMessage = messages[0];
+  // Build output using extracted functions
   let output = '# Conversation\n\n';
-
-  // Add metadata
-  output += '## Metadata\n\n';
-  if (firstMessage.sessionId) {
-    output += `**Session ID:** ${firstMessage.sessionId}\n\n`;
-  }
-  if (firstMessage.gitBranch) {
-    output += `**Git Branch:** ${firstMessage.gitBranch}\n\n`;
-  }
-  if (firstMessage.cwd) {
-    output += `**Working Directory:** ${firstMessage.cwd}\n\n`;
-  }
-  if (firstMessage.version) {
-    output += `**Claude Code Version:** ${firstMessage.version}\n\n`;
-  }
-
-  output += '---\n\n';
+  output += formatMetadata(messages[0]);
   output += '## Messages\n\n';
 
   let inSidechain = false;
@@ -141,128 +349,75 @@ export function formatConversationAsMarkdown(
 
     // Handle sidechain grouping
     if (msg.isSidechain && !inSidechain) {
-      output += '\n---\n';
-      output += '**🔀 SIDECHAIN START**\n';
-      output += '---\n\n';
+      output += formatSidechainStart();
       inSidechain = true;
     } else if (!msg.isSidechain && inSidechain) {
-      output += '\n---\n';
-      output += '**🔀 SIDECHAIN END**\n';
-      output += '---\n\n';
+      output += formatSidechainEnd();
       inSidechain = false;
     }
 
-    // Determine role label
-    let roleLabel: string;
-    if (msg.isSidechain) {
-      roleLabel = msg.type === 'user' ? 'Agent' : 'Subagent';
-    } else {
-      roleLabel = msg.type === 'user' ? 'User' : 'Agent';
-    }
-
+    // Format message header
+    const roleLabel = getRoleLabel(msg.type, msg.isSidechain);
     output += `### **${roleLabel}** (${timestamp}) {#${messageId}}\n\n`;
 
+    // Format message content
     if (msg.type === 'user') {
-      // Handle tool results
-      if (msg.toolUseResult) {
-        output += '**Tool Result:**\n\n';
-        if (typeof msg.toolUseResult === 'string') {
-          output += `${msg.toolUseResult}\n\n`;
-        } else if (Array.isArray(msg.toolUseResult)) {
-          for (const result of msg.toolUseResult) {
-            output += `${result.text || String(result)}\n\n`;
-          }
-        }
-      } else if (typeof msg.message.content === 'string') {
-        output += `${msg.message.content}\n\n`;
-      } else if (Array.isArray(msg.message.content)) {
-        for (const block of msg.message.content) {
-          if (block.type === 'text' && block.text) {
-            output += `${block.text}\n\n`;
-          }
-        }
-      }
+      output += formatUserMessage(msg);
     } else if (msg.type === 'assistant') {
-      const content = msg.message.content;
-      if (typeof content === 'string') {
-        output += `${content}\n\n`;
-      } else if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === 'text' && block.text) {
-            output += `${block.text}\n\n`;
-          } else if (block.type === 'tool_use') {
-            output += `**Tool Use:** \`${block.name}\`\n\n`;
-
-            // Format tool input inline
-            const input = block.input;
-            if (input && typeof input === 'object') {
-              for (const [key, value] of Object.entries(input)) {
-                if (typeof value === 'string' && value.includes('\n')) {
-                  output += `- **${key}:**\n\`\`\`\n${value}\n\`\`\`\n`;
-                } else if (typeof value === 'string') {
-                  output += `- **${key}:** ${value}\n`;
-                } else {
-                  output += `- **${key}:**\n\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n`;
-                }
-              }
-              output += '\n';
-            }
-
-            // Look for corresponding tool result
-            const toolUseId = (block as any).id;
-            if (toolUseId) {
-              let foundResult = false;
-              for (let j = i + 1; j < Math.min(i + 6, messages.length) && !foundResult; j++) {
-                const laterMsg = messages[j];
-                if (laterMsg.type === 'user' && Array.isArray(laterMsg.message.content)) {
-                  for (const resultBlock of laterMsg.message.content) {
-                    if (resultBlock.type === 'tool_result' && (resultBlock as any).tool_use_id === toolUseId) {
-                      const content = (resultBlock as any).content;
-                      output += '**Result:**\n';
-                      if (typeof content === 'string') {
-                        if (content.includes('\n') || content.length > 100) {
-                          output += '```\n';
-                          output += content;
-                          output += '\n```\n\n';
-                        } else {
-                          output += `${content}\n\n`;
-                        }
-                      } else if (Array.isArray(content)) {
-                        output += '```json\n';
-                        output += JSON.stringify(content, null, 2);
-                        output += '\n```\n\n';
-                      }
-                      foundResult = true;
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Add token usage if present
-      if (msg.message.usage) {
-        const usage = msg.message.usage;
-        output += `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
-        if (usage.cache_read_input_tokens) {
-          output += ` | cache read: ${usage.cache_read_input_tokens.toLocaleString()}`;
-        }
-        if (usage.cache_creation_input_tokens) {
-          output += ` | cache create: ${usage.cache_creation_input_tokens.toLocaleString()}`;
-        }
-        output += ` | out: ${(usage.output_tokens || 0).toLocaleString()}_\n\n`;
-      }
+      output += formatAssistantMessage(messages, i, msg);
     }
   }
 
   // Close sidechain if still open
   if (inSidechain) {
-    output += '\n---\n';
-    output += '**🔀 SIDECHAIN END**\n';
-    output += '---\n\n';
+    output += formatSidechainEnd();
+  }
+
+  return output;
+}
+
+/**
+ * Format assistant message content including tool uses.
+ *
+ * @param messages - All messages (for tool result lookup)
+ * @param index - Current message index
+ * @param msg - Assistant message to format
+ * @returns Markdown formatted message content
+ */
+function formatAssistantMessage(
+  messages: ConversationMessage[],
+  index: number,
+  msg: ConversationMessage
+): string {
+  let output = '';
+  const content = msg.message.content;
+
+  if (typeof content === 'string') {
+    output += `${content}\n\n`;
+  } else if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block.type === 'text' && block.text) {
+        output += `${block.text}\n\n`;
+      } else if (block.type === 'tool_use') {
+        output += `**Tool Use:** \`${block.name}\`\n\n`;
+        output += formatToolInput(block.input || {});
+
+        // Look for corresponding tool result
+        const toolUseId = (block as any).id;
+        if (toolUseId) {
+          const result = findToolResult(messages, index, toolUseId);
+          if (result) {
+            output += '**Result:**\n';
+            output += formatToolResultContent(result.content);
+          }
+        }
+      }
+    }
+  }
+
+  // Add token usage if present
+  if (msg.message.usage) {
+    output += formatTokenUsage(msg.message.usage);
   }
 
   return output;
