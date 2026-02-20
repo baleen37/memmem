@@ -108,6 +108,38 @@ export function filterValidMessages(messages: ConversationMessage[]): Conversati
 }
 
 /**
+ * Format sidechain start marker.
+ *
+ * @returns Markdown formatted sidechain start
+ */
+export function formatSidechainStart(): string {
+  return '\n---\n**🔀 SIDECHAIN START**\n---\n\n';
+}
+
+/**
+ * Format sidechain end marker.
+ *
+ * @returns Markdown formatted sidechain end
+ */
+export function formatSidechainEnd(): string {
+  return '\n---\n**🔀 SIDECHAIN END**\n---\n\n';
+}
+
+/**
+ * Get role label based on message type and sidechain status.
+ *
+ * @param type - Message type (user or assistant)
+ * @param isSidechain - Whether message is in sidechain
+ * @returns Human-readable role label
+ */
+export function getRoleLabel(type: 'user' | 'assistant', isSidechain: boolean): string {
+  if (isSidechain) {
+    return type === 'user' ? 'Agent' : 'Subagent';
+  }
+  return type === 'user' ? 'User' : 'Agent';
+}
+
+/**
  * Format JSONL conversation as markdown.
  *
  * @param jsonl - JSONL string containing conversation messages
