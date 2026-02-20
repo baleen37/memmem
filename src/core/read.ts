@@ -59,6 +59,58 @@ export function formatTokenUsage(usage: {
 }
 
 /**
+ * Parse JSONL string into array of conversation messages.
+ * Optionally filters by line range (1-indexed, inclusive).
+ *
+ * @param jsonl - JSONL string containing conversation messages
+ * @param startLine - Starting line number (1-indexed, inclusive)
+ * @param endLine - Ending line number (1-indexed, inclusive)
+ * @returns Array of parsed messages
+ */
+export function parseJsonlMessages(
+  jsonl: string,
+  startLine?: number,
+  endLine?: number
+): ConversationMessage[] {
+  const allLines = jsonl.trim().split('\n').filter(line => line.trim());
+
+  const lines = startLine !== undefined || endLine !== undefined
+    ? allLines.slice(
+        startLine !== undefined ? startLine - 1 : 0,
+        endLine !== undefined ? endLine : undefined
+      )
+    : allLines;
+
+  return lines.map(line => JSON.parse(line));
+}
+
+/**
+ * Format conversation metadata from first message.
+ *
+ * @param firstMessage - First message in conversation
+ * @returns Markdown formatted metadata section
+ */
+export function formatMetadata(firstMessage: ConversationMessage): string {
+  let output = '## Metadata\n\n';
+
+  if (firstMessage.sessionId) {
+    output += `**Session ID:** ${firstMessage.sessionId}\n\n`;
+  }
+  if (firstMessage.gitBranch) {
+    output += `**Git Branch:** ${firstMessage.gitBranch}\n\n`;
+  }
+  if (firstMessage.cwd) {
+    output += `**Working Directory:** ${firstMessage.cwd}\n\n`;
+  }
+  if (firstMessage.version) {
+    output += `**Claude Code Version:** ${firstMessage.version}\n\n`;
+  }
+
+  output += '---\n\n';
+  return output;
+}
+
+/**
  * Read conversation from JSONL file.
  *
  * In V3, conversations are read directly from JSONL files.

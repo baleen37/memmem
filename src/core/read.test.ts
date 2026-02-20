@@ -6,7 +6,9 @@ import { existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import {
   readConversation,
   formatConversationAsMarkdown,
+  parseJsonlMessages,
   filterValidMessages,
+  formatMetadata,
   formatTokenUsage,
   formatSidechainStart,
   formatSidechainEnd,
@@ -23,6 +25,10 @@ interface ConversationMessage {
   timestamp: string;
   type: 'user' | 'assistant';
   isSidechain: boolean;
+  sessionId?: string;
+  gitBranch?: string;
+  cwd?: string;
+  version?: string;
   message: {
     role: string;
     content: string | Array<{ type: string; text?: string; id?: string; name?: string; input?: any }>;
@@ -31,6 +37,7 @@ interface ConversationMessage {
       output_tokens: number;
     };
   };
+  toolUseResult?: Array<{ type: string; text: string }> | string;
 }
 
 describe('read.ts', () => {
@@ -708,5 +715,97 @@ describe('formatUserMessage()', () => {
 
     expect(result).toContain('Result 1');
     expect(result).toContain('Result 2');
+  });
+});
+
+describe('parseJsonlMessages()', () => {
+  test('parses valid JSONL into messages array', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'Hello' } }),
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'Hi' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].uuid).toBe('1');
+    expect(result[1].uuid).toBe('2');
+  });
+
+  test('filters out empty lines', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'Hello' } }),
+      '',
+      '   ',
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'Hi' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl);
+
+    expect(result).toHaveLength(2);
+  });
+
+  test('applies line range with 1-indexed line numbers', () => {
+    const jsonl = [
+      JSON.stringify({ uuid: '1', type: 'user', timestamp: '2024-01-01T00:00:00Z', message: { role: 'user', content: 'A' } }),
+      JSON.stringify({ uuid: '2', type: 'assistant', timestamp: '2024-01-01T00:00:01Z', message: { role: 'assistant', content: 'B' } }),
+      JSON.stringify({ uuid: '3', type: 'user', timestamp: '2024-01-01T00:00:02Z', message: { role: 'user', content: 'C' } })
+    ].join('\n');
+
+    const result = parseJsonlMessages(jsonl, 2, 3);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].uuid).toBe('2');
+    expect(result[1].uuid).toBe('3');
+  });
+});
+
+describe('formatMetadata()', () => {
+  const createMsg = (overrides: Partial<ConversationMessage> = {}): ConversationMessage => ({
+    uuid: 'msg-1',
+    parentUuid: null,
+    timestamp: '2024-01-01T00:00:00Z',
+    type: 'user',
+    isSidechain: false,
+    message: { role: 'user', content: 'Hello' },
+    ...overrides
+  });
+
+  test('formats all metadata fields', () => {
+    const msg = createMsg({
+      sessionId: 'session-123',
+      gitBranch: 'feature-branch',
+      cwd: '/home/user/project',
+      version: '2.0.0'
+    });
+
+    const result = formatMetadata(msg);
+
+    expect(result).toContain('## Metadata');
+    expect(result).toContain('**Session ID:** session-123');
+    expect(result).toContain('**Git Branch:** feature-branch');
+    expect(result).toContain('**Working Directory:** /home/user/project');
+    expect(result).toContain('**Claude Code Version:** 2.0.0');
+  });
+
+  test('omits missing metadata fields', () => {
+    const msg = createMsg({
+      sessionId: 'session-123'
+    });
+
+    const result = formatMetadata(msg);
+
+    expect(result).toContain('**Session ID:** session-123');
+    expect(result).not.toContain('**Git Branch:**');
+    expect(result).not.toContain('**Working Directory:**');
+    expect(result).not.toContain('**Claude Code Version:**');
+  });
+
+  test('returns header only when no metadata present', () => {
+    const msg = createMsg();
+
+    const result = formatMetadata(msg);
+
+    expect(result).toBe('## Metadata\n\n---\n\n');
   });
 });
