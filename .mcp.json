@@ -2,7 +2,8 @@
   "mcpServers": {
     "memmem": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server-wrapper.mjs"]
+      "args": ["scripts/mcp-server-wrapper.mjs"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
     }
   }
 }

@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # memmem
 
 ## Purpose
@@ -5,138 +9,137 @@
 Persistent conversation memory across Claude Code sessions using observation-based semantic search.
 Automatically indexes conversations and provides progressive disclosure search through structured observations.
 
+## Commands
+
+```bash
+npm test                        # Run all tests (vitest)
+npm test path/to/file.test.ts   # Run single test file
+npm run test:watch              # Watch mode
+npm run build                   # Bundle with esbuild (node scripts/build.mjs)
+npm run typecheck               # tsc --noEmit
+```
+
+**CRITICAL**: Always use `npm`, never `bun` — `better-sqlite3` requires Node.js native bindings.
+
 ## Key Files
 
 | File | Description |
 | ---- | ----------- |
-| `src/core/db.ts` | Database schema - use `openDatabase()` in production (preserves data), `initDatabase()` only in tests |
-| `src/cli/inject-cli.ts` | SessionStart hook - injects recent observations into session context |
-| `src/cli/observe-cli.ts` | PostToolUse/Stop hooks - stores events and extracts observations |
+| `src/core/db.ts` | Database schema — use `openDatabase()` in production, `initDatabase()` only in tests |
+| `src/core/observations.ts` | Observation CRUD (generates embeddings on create) |
+| `src/core/search.ts` | Hybrid vector-first + keyword-fallback search |
+| `src/core/compress.ts` | Rule-based tool data compression (no LLM) |
+| `src/core/embeddings.ts` | EmbeddingGemma-300m (768-dim ONNX, 4-bit quantized) |
+| `src/core/ratelimiter.ts` | Token bucket rate limiter (singleton, configurable) |
+| `src/core/llm/` | LLM providers (Gemini, ZAI) + batch extraction prompt |
+| `src/hooks/session-start.ts` | SessionStart hook implementation |
+| `src/hooks/post-tool-use.ts` | PostToolUse hook implementation |
+| `src/hooks/stop.ts` | Stop hook + batch LLM extraction |
+| `src/cli/inject-cli.ts` | CLI entrypoint for SessionStart hook |
+| `src/cli/observe-cli.ts` | CLI entrypoint for PostToolUse + Stop hooks |
 | `src/mcp/server.ts` | MCP server exposing search, get_observations, and read tools |
-| `src/core/observations.ts` | Observation extraction and management logic |
-| `src/core/search.ts` | Vector and text search across observations |
-| `src/core/embeddings.ts` | EmbeddingGemma model wrapper for vector embeddings |
-| `src/core/llm/` | LLM providers (Gemini, ZAI) for summarization |
-| `package.json` | Dependencies and scripts (Node.js only - not Bun) |
-| `hooks/hooks.json` | Hook configuration for SessionStart, PostToolUse, and Stop events |
-| `vitest.config.ts` | Test configuration (max 4 threads, 15s timeout) |
+| `hooks/hooks.json` | Hook configuration (SessionStart, PostToolUse, Stop) |
+| `vitest.config.ts` | Test config (max 4 threads, 15s timeout) |
 
-## Subdirectories
+## Architecture Overview
 
-| Directory | Purpose |
-| --------- | ------- |
-| `src/core/` | Core library: DB, search, observations, LLM providers, compression |
-| `src/cli/` | CLI commands: inject, observe, index, show, stats |
-| `src/hooks/` | Hook handlers for SessionStart, PostToolUse, Stop events |
-| `src/mcp/` | MCP server implementation |
-| `dist/` | Bundled output (cli.mjs, mcp-server.mjs) |
-| `scripts/` | Build scripts (esbuild configuration) |
-| `tests/` | Test suites |
-| `docs/` | Additional documentation |
+### Data Flow
 
-## For AI Agents
-
-### Working In This Directory
-
-- **CRITICAL**: This plugin ONLY uses Node.js, NOT Bun
-  - Run tests with `npm test` (uses vitest)
-  - Build with `npm run build` (uses esbuild via node)
-  - Dependencies include `better-sqlite3` which is NOT supported by Bun
-- Always use `openDatabase()` instead of `initDatabase()` in production code (CLI/hooks)
-  - `openDatabase()`: Opens existing DB or creates new one (preserves data)
-  - `initDatabase()`: Deletes existing DB and creates fresh one (only for tests)
-- After modifying TypeScript files, run `npm run build` to rebuild bundles
-- Run `npm run typecheck` to check TypeScript errors
-- Test changes with `npm test` before committing
-
-### Architecture Overview
-
-**Database Schema:**
-
-- `pending_events`: Temporary storage for tool events before LLM extraction
-- `observations`: Long-term storage for extracted insights
-- `vec_observations`: Vector embeddings for semantic search
-
-**Three-Layer Progressive Disclosure:**
-
-1. `search()`: Returns compact observation summaries (~30 tokens each)
-2. `get_observations()`: Returns full observation details (~200-500 tokens each)
-3. `read()`: Returns raw conversation transcript (~500-2000 tokens)
-
-**Hook Workflow:**
-
-1. **SessionStart** (`inject-cli.ts`): Queries recent observations and injects into session context
-2. **PostToolUse** (`observe-cli.ts`): Compresses and stores tool events in `pending_events`
-3. **Stop** (`observe-cli.ts --summarize`): Batch extracts observations from `pending_events` using LLM
-
-### Common Patterns
-
-**Database Operations:**
-
-```typescript
-// Production (CLI/hooks): Preserve existing data
-const db = openDatabase();
-
-// Tests only: Clean slate
-const db = initDatabase();
+```
+PostToolUse hook → compress (rule-based) → pending_events table
+Stop hook        → batch LLM extraction → observations + vec_observations tables
+SessionStart     → search recent observations → inject into session context
+MCP server       → progressive disclosure search (3 layers)
 ```
 
-**LLM Configuration:**
+### Database Schema
 
-- Requires `~/.config/memmem/config.json`
-- Supported providers: `gemini`, `zai`
-- If no config found, indexing works but summarization is skipped
+Three tables in `~/.config/memmem/conversation-index/conversations.db`:
 
-**Storage Locations:**
+- **`pending_events`**: Temporary storage for compressed tool events within a session
+- **`observations`**: Long-term extracted insights (`title` ≤50 chars, `content` ≤200 chars in English, optional `content_original` for other languages)
+- **`vec_observations`**: 768-dimensional float embeddings (sqlite-vec virtual table)
 
+`openDatabase()` opens/creates (preserves data). `initDatabase()` wipes and recreates — tests only.
+
+### Three-Layer Progressive Disclosure
+
+| Layer | Tool | Output | Token cost |
+|-------|------|--------|-----------|
+| 1 | `search()` | Compact summaries (id, title, project, timestamp) | ~30/result |
+| 2 | `get_observations()` | Full content | ~200-500/result |
+| 3 | `read()` | Raw JSONL transcript | ~500-2000 |
+
+### Search: Vector-First, Keyword Fallback
+
+1. Normalize query to English (optional, via LLM)
+2. Vector search via sqlite-vec (`embedding MATCH ? AND k = ?`)
+3. If results < limit, supplement with keyword search (`LIKE %query%`)
+4. Deduplicate and return
+
+Filter options: `after`/`before` (ISO date), `projects` (array), `files` (substring match in content).
+
+### Batch LLM Extraction (Stop hook)
+
+- Collects all `pending_events` for the session
+- Skips if fewer than 3 events
+- Splits into batches of 15 (default)
+- Each batch sent to LLM with previous 3 observations as deduplication context
+- Extracts observations as JSON array `[{title, content, content_original?}]`
+
+### Compression Rules (no LLM, PostToolUse)
+
+Skipped tools (return null, not stored): `Glob`, `LSP`, `TodoWrite`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `AskUserQuestion`, `EnterPlanMode`, `ExitPlanMode`, `NotebookEdit`, `Skill`
+
+Compressed format examples:
+- `Read /path/file.ts (245 lines)`
+- `Edited /path: old → new` (40-char truncation)
+- `Ran \`command\` → exit 0` or `exit 1: error...` (100-char truncation)
+- `Searched 'pattern' in /path → 5 matches`
+
+### Build Output
+
+esbuild bundles to `dist/`:
+- `src/cli/index-cli.ts` → `dist/cli-internal.mjs`
+- `src/mcp/server.ts` → `dist/mcp-server.mjs`
+- `src/cli-graceful.mjs` → `dist/cli.mjs` (wrapper with graceful shutdown)
+
+External (not bundled): `@huggingface/transformers`, `better-sqlite3`, `sqlite-vec`, `onnxruntime-node`, `sharp`
+
+## Configuration
+
+`~/.config/memmem/config.json`:
+```json
+{
+  "provider": "gemini",
+  "apiKey": "your-key",
+  "model": "gemini-2.0-flash",
+  "ratelimit": {
+    "embedding": { "requestsPerSecond": 5, "burstSize": 10 },
+    "llm": { "requestsPerSecond": 2, "burstSize": 4 }
+  }
+}
+```
+
+Without config: indexing/search works, but Stop hook summarization is skipped.
+
+Storage locations:
 - Database: `~/.config/memmem/conversation-index/conversations.db`
 - Archive: `~/.config/memmem/conversation-archive/`
-- Config: `~/.config/memmem/config.json`
 - Logs: `~/.config/memmem/logs/`
 
-### Testing Requirements
+## Testing
 
-- Run `npm test` before committing (NOT `bun test`)
-- Run single test file: `npm test path/to/file.test.ts`
-- Run tests in watch mode: `npm run test:watch`
-- Ensure all tests pass (634 tests across 26 test files)
+- Test files are co-located with source (`**/*.test.ts`)
+- `tests/` directory contains CLI integration tests and BATS shell tests
 - Integration tests use in-memory SQLite (`:memory:`)
-- Mock LLM providers in tests to avoid API calls
-- Test files are co-located with source files (`**/*.test.ts`)
+- Mock LLM providers to avoid API calls; real embeddings are generated in tests
 
-### Common Pitfalls
+## Common Pitfalls
 
-❌ **Do NOT**:
-
-- Use `bun test` or `bun run` commands (better-sqlite3 not supported)
-- Call `initDatabase()` in production code (wipes database)
-- Use MCP tools directly (waste context - use search-conversation agent instead)
-- Modify DB schema without migration strategy
-
-✅ **Do**:
-
-- Use `npm test` and `npm run build` (Node.js only)
-- Call `openDatabase()` in CLI/hooks (preserves data)
-- Use search-conversation agent for queries (saves 50-100x context)
-- Update tests when changing DB schema
-
-## Dependencies
-
-### External
-
-- **Node.js** (>= 18.0.0) - Required runtime (NOT Bun)
-- **better-sqlite3** (^9.6.0) - SQLite database with native bindings
-- **sqlite-vec** (^0.1.6) - Vector similarity search extension
-- **@huggingface/transformers** (^3.8.1) - EmbeddingGemma for embeddings
-- **@google/generative-ai** (^0.24.1) - Gemini API for summarization
-- **@modelcontextprotocol/sdk** (^1.0.4) - MCP protocol implementation
-- **zod** (^3.22.4) - Schema validation
-- **marked** (^17.0.1) - Markdown parsing
-
-### Development Tools
-
-- **vitest** (^3.0.0) - Test runner (uses Node.js)
-- **esbuild** (^0.25.0) - Bundler
-- **typescript** (^5.3.3) - Type checking
+- **Never** call `initDatabase()` in production code — wipes the database
+- **Never** use MCP tools directly in agents — use the `search-conversation` skill (saves 50-100x context)
+- Modify DB schema requires a migration strategy
+- After modifying TypeScript: rebuild with `npm run build`
 
 <!-- MANUAL: Project-specific notes below this line are preserved -->
