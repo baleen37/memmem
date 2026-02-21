@@ -50,6 +50,19 @@ function getProject(): string {
 }
 
 /**
+ * Derive the Claude project slug from CLAUDE_PROJECT_DIR.
+ * Claude Code injects CLAUDE_PROJECT_DIR into all hook commands.
+ * ~/.claude/projects/ directories are named by replacing '/' and '.' with '-' in the path.
+ */
+function getProjectSlug(): string | undefined {
+  const projectDir = process.env.CLAUDE_PROJECT_DIR;
+  if (!projectDir) {
+    return undefined;
+  }
+  return projectDir.replace(/[/.]/g, '-');
+}
+
+/**
  * Handle PostToolUse hook.
  */
 async function handleObserve(toolName: string, toolInput: unknown, toolResponse: unknown): Promise<void> {
@@ -98,6 +111,7 @@ async function handleSummarize(): Promise<void> {
       provider,
       sessionId,
       project,
+      projectSlug: getProjectSlug(),
     });
   } finally {
     db.close();

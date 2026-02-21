@@ -12,6 +12,9 @@
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { initDatabase, getAllPendingEvents, getObservation } from '../core/db.js';
 import { handlePostToolUse } from './post-tool-use.js';
 import { handleStop, type StopHookOptions } from './stop.js';
@@ -30,18 +33,25 @@ vi.mock('../core/embeddings.js', () => ({
 
 describe('Stop Hook', () => {
   let db: Database.Database;
+  let tmpSrcDir: string;
+  let tmpDstDir: string;
 
   beforeEach(() => {
     // Use in-memory database for testing
     process.env.CONVERSATION_MEMORY_DB_PATH = ':memory:';
     db = initDatabase();
     vi.clearAllMocks();
+
+    tmpSrcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-src-'));
+    tmpDstDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-dst-'));
   });
 
   afterEach(() => {
     if (db) {
       db.close();
     }
+    fs.rmSync(tmpSrcDir, { recursive: true });
+    fs.rmSync(tmpDstDir, { recursive: true });
   });
 
   describe('handleStop', () => {
@@ -375,6 +385,64 @@ describe('Stop Hook', () => {
       await handleStop(db, options);
 
       expect(mockComplete).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('archive', () => {
+    test('archives JSONL when summarization completes', async () => {
+      const mockComplete = vi.fn().mockResolvedValue({
+        text: JSON.stringify([{ title: 'Test', content: 'Content' }]),
+        usage: { input_tokens: 100, output_tokens: 20 },
+      });
+      mockLLMProvider.complete = mockComplete;
+
+      const sessionId = 'session-archive-test';
+      const projectSlug = '-Users-jito-test-project';
+
+      // Create source JSONL
+      const srcProjectDir = path.join(tmpSrcDir, projectSlug);
+      fs.mkdirSync(srcProjectDir, { recursive: true });
+      fs.writeFileSync(path.join(srcProjectDir, `${sessionId}.jsonl`), '{"type":"user"}\n');
+
+      handlePostToolUse(db, sessionId, 'test-project', 'Read', { file_path: '/src/a.ts', lines: 10 });
+      handlePostToolUse(db, sessionId, 'test-project', 'Edit', { file_path: '/src/a.ts', old_string: 'a', new_string: 'b' });
+      handlePostToolUse(db, sessionId, 'test-project', 'Bash', { command: 'npm test', exitCode: 0 });
+
+      await handleStop(db, {
+        provider: mockLLMProvider,
+        sessionId,
+        project: 'test-project',
+        projectSlug,
+        claudeProjectsDir: tmpSrcDir,
+        archiveDir: tmpDstDir,
+      });
+
+      const archivedPath = path.join(tmpDstDir, projectSlug, `${sessionId}.jsonl`);
+      expect(fs.existsSync(archivedPath)).toBe(true);
+    });
+
+    test('skips archive when fewer than 3 events (no summarization)', async () => {
+      const sessionId = 'session-skip-archive';
+      const projectSlug = '-Users-jito-test-project';
+
+      const srcProjectDir = path.join(tmpSrcDir, projectSlug);
+      fs.mkdirSync(srcProjectDir, { recursive: true });
+      fs.writeFileSync(path.join(srcProjectDir, `${sessionId}.jsonl`), '{"type":"user"}\n');
+
+      handlePostToolUse(db, sessionId, 'test-project', 'Read', { file_path: '/src/a.ts', lines: 10 });
+      handlePostToolUse(db, sessionId, 'test-project', 'Read', { file_path: '/src/b.ts', lines: 10 });
+
+      await handleStop(db, {
+        provider: mockLLMProvider,
+        sessionId,
+        project: 'test-project',
+        projectSlug,
+        claudeProjectsDir: tmpSrcDir,
+        archiveDir: tmpDstDir,
+      });
+
+      const archivedPath = path.join(tmpDstDir, projectSlug, `${sessionId}.jsonl`);
+      expect(fs.existsSync(archivedPath)).toBe(false);
     });
   });
 

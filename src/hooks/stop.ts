@@ -19,6 +19,10 @@ import type { LLMProvider, CompressedEvent, PreviousObservation } from '../core/
 import { extractObservationsFromBatch } from '../core/llm/index.js';
 import { create as createObservation } from '../core/observations.js';
 import { getAllPendingEvents, type PendingEvent } from '../core/db.js';
+import { archiveSession } from '../core/archive.js';
+import { getArchiveDir } from '../core/paths.js';
+import os from 'os';
+import path from 'path';
 
 /**
  * Default batch size for event processing.
@@ -44,6 +48,12 @@ export interface StopHookOptions {
   project: string;
   /** Optional batch size (defaults to DEFAULT_BATCH_SIZE) */
   batchSize?: number;
+  /** Project slug (directory name under ~/.claude/projects/) for archive */
+  projectSlug?: string;
+  /** Override Claude projects base directory (for testing) */
+  claudeProjectsDir?: string;
+  /** Override archive destination directory (for testing) */
+  archiveDir?: string;
 }
 
 /**
@@ -63,7 +73,7 @@ export async function handleStop(
   db: Database.Database,
   options: StopHookOptions
 ): Promise<void> {
-  const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE } = options;
+  const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE, projectSlug, claudeProjectsDir, archiveDir } = options;
 
   // Step 1: Collect all pending_events for this session
   const allEvents: Array<PendingEvent & { id: number }> = getAllPendingEvents(db, sessionId);
@@ -119,6 +129,20 @@ export async function handleStop(
     } catch (error) {
       // Log but continue with next batch
       console.warn(`Failed to process batch: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // Step 6: Archive JSONL to conversation-archive
+  if (projectSlug) {
+    try {
+      archiveSession({
+        sessionId,
+        projectSlug,
+        claudeProjectsDir: claudeProjectsDir ?? path.join(os.homedir(), '.claude', 'projects'),
+        archiveDir: archiveDir ?? getArchiveDir(),
+      });
+    } catch (error) {
+      console.warn(`Failed to archive session: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

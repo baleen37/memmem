@@ -30,6 +30,12 @@ function getSuperpowersDir() {
   }
   return ensureDir(dir);
 }
+function getArchiveDir() {
+  if (process.env.TEST_ARCHIVE_DIR) {
+    return ensureDir(process.env.TEST_ARCHIVE_DIR);
+  }
+  return ensureDir(path.join(getSuperpowersDir(), "conversation-archive"));
+}
 function getIndexDir() {
   return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
 }
@@ -435,13 +441,13 @@ function compressGrep(data) {
     return "Searched";
   }
   const pattern = data.pattern || "";
-  const path3 = data.path;
+  const path5 = data.path;
   const count = data.count;
   const matches = data.matches;
   const matchCount = count !== void 0 ? count : matches?.length || 0;
   let result = `Searched '${pattern}'`;
-  if (path3) {
-    result += ` in ${path3}`;
+  if (path5) {
+    result += ` in ${path5}`;
   }
   result += ` \u2192 ${matchCount} matches`;
   return result;
@@ -2224,9 +2230,42 @@ var init_observations = __esm({
   }
 });
 
+// src/core/archive.ts
+import fs4 from "fs";
+import path3 from "path";
+function findSessionJsonl(projectsDir, sessionId) {
+  const jsonlPath = path3.join(projectsDir, `${sessionId}.jsonl`);
+  if (fs4.existsSync(jsonlPath)) {
+    return jsonlPath;
+  }
+  return null;
+}
+function archiveSession(options) {
+  const { sessionId, projectSlug, claudeProjectsDir, archiveDir } = options;
+  const srcDir = path3.join(claudeProjectsDir, projectSlug);
+  const srcPath = findSessionJsonl(srcDir, sessionId);
+  if (!srcPath) {
+    return;
+  }
+  const dstDir = path3.join(archiveDir, projectSlug);
+  const dstPath = path3.join(dstDir, `${sessionId}.jsonl`);
+  if (fs4.existsSync(dstPath)) {
+    return;
+  }
+  fs4.mkdirSync(dstDir, { recursive: true });
+  fs4.copyFileSync(srcPath, dstPath);
+}
+var init_archive = __esm({
+  "src/core/archive.ts"() {
+    "use strict";
+  }
+});
+
 // src/hooks/stop.ts
+import os2 from "os";
+import path4 from "path";
 async function handleStop(db, options) {
-  const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE } = options;
+  const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE, projectSlug, claudeProjectsDir, archiveDir } = options;
   const allEvents = getAllPendingEvents(db, sessionId);
   if (allEvents.length < MIN_EVENT_THRESHOLD) {
     return;
@@ -2266,6 +2305,18 @@ async function handleStop(db, options) {
       console.warn(`Failed to process batch: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  if (projectSlug) {
+    try {
+      archiveSession({
+        sessionId,
+        projectSlug,
+        claudeProjectsDir: claudeProjectsDir ?? path4.join(os2.homedir(), ".claude", "projects"),
+        archiveDir: archiveDir ?? getArchiveDir()
+      });
+    } catch (error) {
+      console.warn(`Failed to archive session: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 }
 function createBatches(events, batchSize) {
   const batches = [];
@@ -2281,6 +2332,8 @@ var init_stop = __esm({
     init_llm();
     init_observations();
     init_db();
+    init_archive();
+    init_paths();
     DEFAULT_BATCH_SIZE = 15;
     MIN_EVENT_THRESHOLD = 3;
   }
@@ -2300,6 +2353,13 @@ function getSessionId() {
 }
 function getProject2() {
   return process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || "default";
+}
+function getProjectSlug() {
+  const projectDir = process.env.CLAUDE_PROJECT_DIR;
+  if (!projectDir) {
+    return void 0;
+  }
+  return projectDir.replace(/[/.]/g, "-");
 }
 async function handleObserve(toolName, toolInput, toolResponse) {
   const db = openDatabase();
@@ -2331,7 +2391,8 @@ async function handleSummarize() {
     await handleStop(db, {
       provider,
       sessionId,
-      project
+      project,
+      projectSlug: getProjectSlug()
     });
   } finally {
     db.close();
