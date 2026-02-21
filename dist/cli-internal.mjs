@@ -100,6 +100,7 @@ function createDatabase(wipe) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        content_original TEXT,
         project TEXT NOT NULL,
         session_id TEXT,
         timestamp INTEGER NOT NULL,
@@ -109,6 +110,15 @@ function createDatabase(wipe) {
     db.exec(`CREATE INDEX idx_observations_project ON observations(project)`);
     db.exec(`CREATE INDEX idx_observations_session ON observations(session_id)`);
     db.exec(`CREATE INDEX idx_observations_timestamp ON observations(timestamp DESC)`);
+  }
+  const observationColumns = db.prepare(`
+    SELECT name FROM pragma_table_info('observations')
+  `).all();
+  const hasContentOriginal = observationColumns.some(
+    (column) => column.name.toLowerCase() === "content_original"
+  );
+  if (!hasContentOriginal) {
+    db.exec(`ALTER TABLE observations ADD COLUMN content_original TEXT`);
   }
   if (!tableNames.has("vec_observations")) {
     db.exec(`
@@ -137,12 +147,13 @@ function insertPendingEvent(db, event) {
 }
 function insertObservation(db, observation, embedding) {
   const stmt = db.prepare(`
-    INSERT INTO observations (title, content, project, session_id, timestamp, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO observations (title, content, content_original, project, session_id, timestamp, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     observation.title,
     observation.content,
+    observation.contentOriginal ?? null,
     observation.project,
     observation.sessionId ?? null,
     observation.timestamp,
@@ -171,7 +182,7 @@ function searchObservations(db, options = {}) {
   const { project, sessionId, after, before, limit = 100 } = options;
   const params = [];
   let sql = `
-    SELECT id, title, content, project, session_id as sessionId, timestamp, created_at as createdAt
+    SELECT id, title, content, content_original as contentOriginal, project, session_id as sessionId, timestamp, created_at as createdAt
     FROM observations
     WHERE 1=1
   `;
@@ -2028,7 +2039,8 @@ function buildBatchExtractPrompt(events, previousObservations) {
 
 Remember:
 - title (under 50 characters)
-- content (under 200 characters)
+- content (English canonical summary under 200 characters)
+- content_original (optional original-language/source text when available)
 - Return empty array [] if this batch is low-value
 - Avoid duplicating information from previous observations above
 
@@ -2062,10 +2074,14 @@ function parseBatchExtractResponse(response) {
     }
     return parsed.filter((item) => {
       return typeof item === "object" && item !== null && typeof item.title === "string" && typeof item.content === "string" && item.title.trim().length > 0 && item.content.trim().length > 0;
-    }).map((item) => ({
-      title: item.title.trim(),
-      content: item.content.trim()
-    }));
+    }).map((item) => {
+      const contentOriginal = typeof item.content_original === "string" ? item.content_original.trim() : void 0;
+      return {
+        title: item.title.trim(),
+        content: item.content.trim(),
+        ...contentOriginal ? { contentOriginal } : {}
+      };
+    });
   } catch (error) {
     return [];
   }
@@ -2113,13 +2129,14 @@ var init_batch_extract_prompt = __esm({
 
 Your task:
 1. Analyze the batch of tool events
-2. Extract meaningful observations as {title, content} pairs
+2. Extract meaningful observations as {title, content, content_original?} objects
 3. Avoid duplicating information from previous observations
 4. Return an empty JSON array if the batch contains only low-value events
 
 Guidelines:
 - Title: Keep under 50 characters, descriptive and concise
-- Content: Keep under 200 characters, informative but brief
+- content: English canonical summary under 200 characters, informative but brief
+- content_original: Optional original-language/source text when available; omit this field if source is already English or unavailable
 - Focus on: decisions, learnings, bugfixes, features, refactoring, debugging
 - Skip: trivial operations, simple file reads, status checks, repetitive tasks
 - Return JSON array only, no markdown, no explanations
@@ -2127,7 +2144,8 @@ Guidelines:
 Response format:
 [
   {"title": "Fixed authentication bug", "content": "Resolved JWT token validation in login flow"},
-  {"title": "Added test coverage", "content": "Added unit tests for auth module"}
+  {"title": "Added test coverage", "content": "Added unit tests for auth module"},
+  {"title": "Clarified payment requirement", "content": "Documented payment validation rule for checkout", "content_original": "\uACB0\uC81C \uAC80\uC99D \uADDC\uCE59\uC744 \uCCB4\uD06C\uC544\uC6C3 \uD750\uB984\uC5D0 \uBB38\uC11C\uD654\uD568"}
 ]`;
   }
 });
@@ -2180,12 +2198,13 @@ var init_embeddings = __esm({
 });
 
 // src/core/observations.ts
-async function create(db, title, content, project, sessionId, timestamp) {
+async function create(db, title, content, project, sessionId, timestamp, contentOriginal) {
   const now = Date.now();
   const obsTimestamp = timestamp ?? now;
   const observation = {
     title,
     content,
+    contentOriginal,
     project,
     sessionId,
     timestamp: obsTimestamp,
@@ -2235,7 +2254,8 @@ async function handleStop(db, options) {
             obs.content,
             project,
             sessionId,
-            Date.now()
+            Date.now(),
+            obs.contentOriginal
           );
         } catch (error) {
           console.warn(`Failed to store observation: ${error instanceof Error ? error.message : String(error)}`);

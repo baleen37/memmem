@@ -24,6 +24,7 @@ export interface CompressedEvent {
 export interface ExtractedObservation {
   title: string;
   content: string;
+  contentOriginal?: string;
 }
 
 /**
@@ -42,13 +43,14 @@ const BATCH_EXTRACT_SYSTEM_PROMPT = `You are an observation extractor that analy
 
 Your task:
 1. Analyze the batch of tool events
-2. Extract meaningful observations as {title, content} pairs
+2. Extract meaningful observations as {title, content, content_original?} objects
 3. Avoid duplicating information from previous observations
 4. Return an empty JSON array if the batch contains only low-value events
 
 Guidelines:
 - Title: Keep under 50 characters, descriptive and concise
-- Content: Keep under 200 characters, informative but brief
+- content: English canonical summary under 200 characters, informative but brief
+- content_original: Optional original-language/source text when available; omit this field if source is already English or unavailable
 - Focus on: decisions, learnings, bugfixes, features, refactoring, debugging
 - Skip: trivial operations, simple file reads, status checks, repetitive tasks
 - Return JSON array only, no markdown, no explanations
@@ -56,7 +58,8 @@ Guidelines:
 Response format:
 [
   {"title": "Fixed authentication bug", "content": "Resolved JWT token validation in login flow"},
-  {"title": "Added test coverage", "content": "Added unit tests for auth module"}
+  {"title": "Added test coverage", "content": "Added unit tests for auth module"},
+  {"title": "Clarified payment requirement", "content": "Documented payment validation rule for checkout", "content_original": "결제 검증 규칙을 체크아웃 흐름에 문서화함"}
 ]`;
 
 /**
@@ -94,7 +97,8 @@ export function buildBatchExtractPrompt(
 
 Remember:
 - title (under 50 characters)
-- content (under 200 characters)
+- content (English canonical summary under 200 characters)
+- content_original (optional original-language/source text when available)
 - Return empty array [] if this batch is low-value
 - Avoid duplicating information from previous observations above
 
@@ -153,7 +157,7 @@ export function parseBatchExtractResponse(response: string): ExtractedObservatio
     }
 
     return parsed
-      .filter((item): item is ExtractedObservation => {
+      .filter((item): item is { title: string; content: string; content_original?: unknown } => {
         return (
           typeof item === 'object' &&
           item !== null &&
@@ -163,10 +167,17 @@ export function parseBatchExtractResponse(response: string): ExtractedObservatio
           (item as ExtractedObservation).content.trim().length > 0
         );
       })
-      .map((item) => ({
-        title: item.title.trim(),
-        content: item.content.trim(),
-      }));
+      .map((item) => {
+        const contentOriginal = typeof item.content_original === 'string'
+          ? item.content_original.trim()
+          : undefined;
+
+        return {
+          title: item.title.trim(),
+          content: item.content.trim(),
+          ...(contentOriginal ? { contentOriginal } : {}),
+        };
+      });
   } catch (error) {
     // Return empty array on any parsing error
     return [];

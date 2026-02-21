@@ -29,6 +29,12 @@ vi.mock('../core/read.js', () => ({
   readConversation: vi.fn(),
 }));
 
+// Mock llm config/provider for query normalization wiring
+vi.mock('../core/llm/index.js', () => ({
+  loadConfig: vi.fn(),
+  createProvider: vi.fn(),
+}));
+
 // Import handlers AFTER mocking
 import {
   handleSearch,
@@ -38,24 +44,38 @@ import {
   SearchInputSchema,
   GetObservationsInputSchema,
   ReadInputSchema,
+  __resetQueryNormalizerCacheForTests,
+  shouldRunAsEntrypoint,
 } from './server.js';
 
 // Import mocked modules to get typed mock functions
 import { search as mockSearch } from '../core/search.js';
 import { findByIds as mockFindByIds } from '../core/observations.js';
 import { readConversation as mockReadConversation } from '../core/read.js';
+import { loadConfig as mockLoadConfig, createProvider as mockCreateProvider } from '../core/llm/index.js';
 
 describe('MCP Server Handlers', () => {
   let mockDb: Database.Database;
 
   beforeEach(() => {
+    __resetQueryNormalizerCacheForTests();
     vi.clearAllMocks();
+    vi.mocked(mockLoadConfig).mockReturnValue(null);
+    vi.mocked(mockCreateProvider).mockResolvedValue({
+      complete: vi.fn()
+    } as any);
     // Create a mock database
     mockDb = {} as Database.Database;
   });
 
   afterEach(() => {
     vi.resetAllMocks();
+  });
+
+  describe('entrypoint guard', () => {
+    test('does not run as entrypoint in test environment', () => {
+      expect(shouldRunAsEntrypoint()).toBe(false);
+    });
   });
 
   describe('handleSearch', () => {
@@ -108,6 +128,7 @@ describe('MCP Server Handlers', () => {
         before: '2024-12-31',
         projects: ['project-a', 'project-b'],
         files: ['/path/to/file.ts'],
+        queryNormalizerProvider: undefined,
       });
     });
 
@@ -175,12 +196,166 @@ describe('MCP Server Handlers', () => {
         limit: 10,
       }));
     });
+
+    test('passes queryNormalizerProvider when llm config exists', async () => {
+      vi.mocked(mockSearch).mockResolvedValueOnce([]);
+      vi.mocked(mockLoadConfig).mockReturnValue({
+        provider: 'gemini',
+        apiKey: 'test-key-pass'
+      } as any);
+
+      const provider = { complete: vi.fn() } as any;
+      vi.mocked(mockCreateProvider).mockResolvedValue(provider);
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      await handleSearch(params, mockDb);
+
+      expect(mockCreateProvider).toHaveBeenCalledTimes(1);
+      expect(mockSearch).toHaveBeenCalledWith('test', expect.objectContaining({
+        queryNormalizerProvider: provider,
+      }));
+    });
+
+    test('reuses cached queryNormalizerProvider for same config', async () => {
+      vi.mocked(mockSearch).mockResolvedValue([]);
+      vi.mocked(mockLoadConfig).mockReturnValue({
+        provider: 'gemini',
+        apiKey: 'test-key-cache'
+      } as any);
+
+      const provider = { complete: vi.fn() } as any;
+      vi.mocked(mockCreateProvider).mockResolvedValue(provider);
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      await handleSearch(params, mockDb);
+      await handleSearch(params, mockDb);
+
+      expect(mockCreateProvider).toHaveBeenCalledTimes(1);
+      expect(mockSearch).toHaveBeenNthCalledWith(1, 'test', expect.objectContaining({
+        queryNormalizerProvider: provider,
+      }));
+      expect(mockSearch).toHaveBeenNthCalledWith(2, 'test', expect.objectContaining({
+        queryNormalizerProvider: provider,
+      }));
+    });
+
+    test('does not reuse cached provider when config differs', async () => {
+      vi.mocked(mockSearch).mockResolvedValue([]);
+      vi.mocked(mockLoadConfig)
+        .mockReturnValueOnce({
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+          apiKey: 'shared-key'
+        } as any)
+        .mockReturnValueOnce({
+          provider: 'zai',
+          model: 'glm-4.5-air',
+          apiKey: 'shared-key'
+        } as any);
+
+      const firstProvider = { complete: vi.fn() } as any;
+      const secondProvider = { complete: vi.fn() } as any;
+      vi.mocked(mockCreateProvider)
+        .mockResolvedValueOnce(firstProvider)
+        .mockResolvedValueOnce(secondProvider);
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      await handleSearch(params, mockDb);
+      await handleSearch(params, mockDb);
+
+      expect(mockCreateProvider).toHaveBeenCalledTimes(2);
+      expect(mockSearch).toHaveBeenNthCalledWith(1, 'test', expect.objectContaining({
+        queryNormalizerProvider: firstProvider,
+      }));
+      expect(mockSearch).toHaveBeenNthCalledWith(2, 'test', expect.objectContaining({
+        queryNormalizerProvider: secondProvider,
+      }));
+    });
+
+    test('does not reuse cached provider when one config omits model and another sets empty model', async () => {
+      vi.mocked(mockSearch).mockResolvedValue([]);
+      vi.mocked(mockLoadConfig)
+        .mockReturnValueOnce({
+          provider: 'gemini',
+          apiKey: 'shared-key'
+        } as any)
+        .mockReturnValueOnce({
+          provider: 'gemini',
+          model: '',
+          apiKey: 'shared-key'
+        } as any);
+
+      const firstProvider = { complete: vi.fn() } as any;
+      const secondProvider = { complete: vi.fn() } as any;
+      vi.mocked(mockCreateProvider)
+        .mockResolvedValueOnce(firstProvider)
+        .mockResolvedValueOnce(secondProvider);
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      await handleSearch(params, mockDb);
+      await handleSearch(params, mockDb);
+
+      expect(mockCreateProvider).toHaveBeenCalledTimes(2);
+      expect(mockSearch).toHaveBeenNthCalledWith(1, 'test', expect.objectContaining({
+        queryNormalizerProvider: firstProvider,
+      }));
+      expect(mockSearch).toHaveBeenNthCalledWith(2, 'test', expect.objectContaining({
+        queryNormalizerProvider: secondProvider,
+      }));
+    });
+
+    test('reuses in-flight queryNormalizerProvider creation for concurrent requests', async () => {
+      vi.mocked(mockSearch).mockResolvedValue([]);
+      vi.mocked(mockLoadConfig).mockReturnValue({
+        provider: 'gemini',
+        apiKey: 'test-key-concurrent'
+      } as any);
+
+      const provider = { complete: vi.fn() } as any;
+      let resolveProvider!: (value: any) => void;
+      const providerPromise = new Promise<any>(resolve => {
+        resolveProvider = resolve;
+      });
+      vi.mocked(mockCreateProvider).mockReturnValue(providerPromise as any);
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      const firstCall = handleSearch(params, mockDb);
+      const secondCall = handleSearch(params, mockDb);
+
+      expect(mockCreateProvider).toHaveBeenCalledTimes(1);
+
+      resolveProvider(provider);
+      await Promise.all([firstCall, secondCall]);
+
+      expect(mockSearch).toHaveBeenNthCalledWith(1, 'test', expect.objectContaining({
+        queryNormalizerProvider: provider,
+      }));
+      expect(mockSearch).toHaveBeenNthCalledWith(2, 'test', expect.objectContaining({
+        queryNormalizerProvider: provider,
+      }));
+    });
+
+    test('falls back to undefined queryNormalizerProvider when provider creation fails', async () => {
+      vi.mocked(mockSearch).mockResolvedValueOnce([]);
+      vi.mocked(mockLoadConfig).mockReturnValue({
+        provider: 'gemini',
+        apiKey: 'test-key'
+      } as any);
+      vi.mocked(mockCreateProvider).mockRejectedValue(new Error('provider init failed'));
+
+      const params = SearchInputSchema.parse({ query: 'test' });
+      await handleSearch(params, mockDb);
+
+      expect(mockSearch).toHaveBeenCalledWith('test', expect.objectContaining({
+        queryNormalizerProvider: undefined,
+      }));
+    });
   });
 
   describe('handleGetObservations', () => {
     test('converts string IDs to numbers', async () => {
       vi.mocked(mockFindByIds).mockResolvedValueOnce([
-        { id: 1, title: 'Obs 1', content: 'Content 1', project: 'p', sessionId: null, timestamp: 1000 },
+        { id: 1, title: 'Obs 1', content: 'Content 1', project: 'p', sessionId: null, contentOriginal: null, timestamp: 1000 },
       ]);
 
       const params = GetObservationsInputSchema.parse({ ids: ['1', '2'] });
@@ -192,8 +367,8 @@ describe('MCP Server Handlers', () => {
 
     test('handles numeric IDs directly', async () => {
       vi.mocked(mockFindByIds).mockResolvedValueOnce([
-        { id: 10, title: 'Obs 10', content: 'Content 10', project: 'p', sessionId: null, timestamp: 2000 },
-        { id: 20, title: 'Obs 20', content: 'Content 20', project: 'p', sessionId: null, timestamp: 3000 },
+        { id: 10, title: 'Obs 10', content: 'Content 10', project: 'p', sessionId: null, contentOriginal: null, timestamp: 2000 },
+        { id: 20, title: 'Obs 20', content: 'Content 20', project: 'p', sessionId: null, contentOriginal: null, timestamp: 3000 },
       ]);
 
       const params = GetObservationsInputSchema.parse({ ids: [10, 20] });
@@ -205,7 +380,7 @@ describe('MCP Server Handlers', () => {
 
     test('handles mixed string/number IDs', async () => {
       vi.mocked(mockFindByIds).mockResolvedValueOnce([
-        { id: 1, title: 'Obs', content: 'C', project: 'p', sessionId: null, timestamp: 1000 },
+        { id: 1, title: 'Obs', content: 'C', project: 'p', sessionId: null, contentOriginal: null, timestamp: 1000 },
       ]);
 
       const params = GetObservationsInputSchema.parse({ ids: ['1', 2, '3'] });
@@ -222,6 +397,7 @@ describe('MCP Server Handlers', () => {
           content: 'Full content here',
           project: 'my-project',
           sessionId: 'session-123',
+          contentOriginal: null,
           timestamp: 1704067200000,
         },
       ]);
@@ -238,6 +414,32 @@ describe('MCP Server Handlers', () => {
       });
     });
 
+    test('includes content_original when includeOriginal is true', async () => {
+      vi.mocked(mockFindByIds).mockResolvedValueOnce([
+        {
+          id: 7,
+          title: 'Bilingual observation',
+          content: 'English canonical summary',
+          contentOriginal: '원문 텍스트',
+          project: 'my-project',
+          sessionId: 'session-123',
+          timestamp: 1704067200000,
+        },
+      ]);
+
+      const params = GetObservationsInputSchema.parse({ ids: [7], includeOriginal: true });
+      const results = await handleGetObservations(params, mockDb);
+
+      expect(results[0]).toEqual({
+        id: 7,
+        title: 'Bilingual observation',
+        content: 'English canonical summary',
+        content_original: '원문 텍스트',
+        project: 'my-project',
+        timestamp: 1704067200000,
+      });
+    });
+
     test('returns empty results when no observations found', async () => {
       vi.mocked(mockFindByIds).mockResolvedValueOnce([]);
 
@@ -249,9 +451,9 @@ describe('MCP Server Handlers', () => {
 
     test('handles multiple observations', async () => {
       vi.mocked(mockFindByIds).mockResolvedValueOnce([
-        { id: 1, title: 'First', content: 'C1', project: 'p1', sessionId: null, timestamp: 1000 },
-        { id: 2, title: 'Second', content: 'C2', project: 'p2', sessionId: null, timestamp: 2000 },
-        { id: 3, title: 'Third', content: 'C3', project: 'p3', sessionId: null, timestamp: 3000 },
+        { id: 1, title: 'First', content: 'C1', project: 'p1', sessionId: null, contentOriginal: null, timestamp: 1000 },
+        { id: 2, title: 'Second', content: 'C2', project: 'p2', sessionId: null, contentOriginal: null, timestamp: 2000 },
+        { id: 3, title: 'Third', content: 'C3', project: 'p3', sessionId: null, contentOriginal: null, timestamp: 3000 },
       ]);
 
       const params = GetObservationsInputSchema.parse({ ids: [1, 2, 3] });
@@ -259,6 +461,32 @@ describe('MCP Server Handlers', () => {
 
       expect(results).toHaveLength(3);
       expect(results.map(r => r.id)).toEqual([1, 2, 3]);
+    });
+
+    test('does not include content_original by default', async () => {
+      vi.mocked(mockFindByIds).mockResolvedValueOnce([
+        {
+          id: 8,
+          title: 'Default output',
+          content: 'English summary',
+          contentOriginal: '원문 텍스트',
+          project: 'my-project',
+          sessionId: null,
+          timestamp: 1704067200000,
+        },
+      ]);
+
+      const params = GetObservationsInputSchema.parse({ ids: [8] });
+      const results = await handleGetObservations(params, mockDb);
+
+      expect(results[0]).toEqual({
+        id: 8,
+        title: 'Default output',
+        content: 'English summary',
+        project: 'my-project',
+        timestamp: 1704067200000,
+      });
+      expect(results[0]).not.toHaveProperty('content_original');
     });
   });
 

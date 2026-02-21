@@ -32,6 +32,7 @@ export interface PendingEvent {
 export interface Observation {
   title: string;
   content: string;
+  contentOriginal?: string | null;
   project: string;
   sessionId?: string;
   timestamp: number;
@@ -42,6 +43,7 @@ export interface ObservationResult {
   id: number;
   title: string;
   content: string;
+  contentOriginal: string | null;
   project: string;
   sessionId: string | null;
   timestamp: number;
@@ -128,6 +130,7 @@ function createDatabase(wipe: boolean): Database.Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        content_original TEXT,
         project TEXT NOT NULL,
         session_id TEXT,
         timestamp INTEGER NOT NULL,
@@ -137,6 +140,18 @@ function createDatabase(wipe: boolean): Database.Database {
     db.exec(`CREATE INDEX idx_observations_project ON observations(project)`);
     db.exec(`CREATE INDEX idx_observations_session ON observations(session_id)`);
     db.exec(`CREATE INDEX idx_observations_timestamp ON observations(timestamp DESC)`);
+  }
+
+  // Upgrade observations schema for existing databases
+  // Add content_original column if missing
+  const observationColumns = db.prepare(`
+    SELECT name FROM pragma_table_info('observations')
+  `).all() as Array<{ name: string }>;
+  const hasContentOriginal = observationColumns.some(
+    column => column.name.toLowerCase() === 'content_original'
+  );
+  if (!hasContentOriginal) {
+    db.exec(`ALTER TABLE observations ADD COLUMN content_original TEXT`);
   }
 
   // Create vector table if not exists
@@ -187,13 +202,14 @@ export function insertObservation(
 ): number {
   // Insert into main table
   const stmt = db.prepare(`
-    INSERT INTO observations (title, content, project, session_id, timestamp, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO observations (title, content, content_original, project, session_id, timestamp, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   const result = stmt.run(
     observation.title,
     observation.content,
+    observation.contentOriginal ?? null,
     observation.project,
     observation.sessionId ?? null,
     observation.timestamp,
@@ -246,7 +262,7 @@ export function searchObservations(
 
   // Build query with optional filters
   let sql = `
-    SELECT id, title, content, project, session_id as sessionId, timestamp, created_at as createdAt
+    SELECT id, title, content, content_original as contentOriginal, project, session_id as sessionId, timestamp, created_at as createdAt
     FROM observations
     WHERE 1=1
   `;
@@ -286,7 +302,7 @@ export function getObservation(
   id: number
 ): ObservationResult | null {
   const stmt = db.prepare(`
-    SELECT id, title, content, project, session_id as sessionId, timestamp, created_at as createdAt
+    SELECT id, title, content, content_original as contentOriginal, project, session_id as sessionId, timestamp, created_at as createdAt
     FROM observations
     WHERE id = ?
   `);

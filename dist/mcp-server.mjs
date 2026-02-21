@@ -6779,16 +6779,1361 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs4, exportName) {
+    function addFormats(ajv, list, fs5, exportName) {
       var _a;
       var _b;
       (_a = (_b = ajv.opts.code).formats) !== null && _a !== void 0 ? _a : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs4[f]);
+        ajv.addFormat(f, fs5[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
+  }
+});
+
+// node_modules/@google/generative-ai/dist/index.mjs
+function getClientHeaders(requestOptions) {
+  const clientHeaders = [];
+  if (requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.apiClient) {
+    clientHeaders.push(requestOptions.apiClient);
+  }
+  clientHeaders.push(`${PACKAGE_LOG_HEADER}/${PACKAGE_VERSION}`);
+  return clientHeaders.join(" ");
+}
+async function getHeaders(url) {
+  var _a;
+  const headers = new Headers();
+  headers.append("Content-Type", "application/json");
+  headers.append("x-goog-api-client", getClientHeaders(url.requestOptions));
+  headers.append("x-goog-api-key", url.apiKey);
+  let customHeaders = (_a = url.requestOptions) === null || _a === void 0 ? void 0 : _a.customHeaders;
+  if (customHeaders) {
+    if (!(customHeaders instanceof Headers)) {
+      try {
+        customHeaders = new Headers(customHeaders);
+      } catch (e) {
+        throw new GoogleGenerativeAIRequestInputError(`unable to convert customHeaders value ${JSON.stringify(customHeaders)} to Headers: ${e.message}`);
+      }
+    }
+    for (const [headerName, headerValue] of customHeaders.entries()) {
+      if (headerName === "x-goog-api-key") {
+        throw new GoogleGenerativeAIRequestInputError(`Cannot set reserved header name ${headerName}`);
+      } else if (headerName === "x-goog-api-client") {
+        throw new GoogleGenerativeAIRequestInputError(`Header name ${headerName} can only be set using the apiClient field`);
+      }
+      headers.append(headerName, headerValue);
+    }
+  }
+  return headers;
+}
+async function constructModelRequest(model, task, apiKey, stream, body, requestOptions) {
+  const url = new RequestUrl(model, task, apiKey, stream, requestOptions);
+  return {
+    url: url.toString(),
+    fetchOptions: Object.assign(Object.assign({}, buildFetchOptions(requestOptions)), { method: "POST", headers: await getHeaders(url), body })
+  };
+}
+async function makeModelRequest(model, task, apiKey, stream, body, requestOptions = {}, fetchFn = fetch) {
+  const { url, fetchOptions } = await constructModelRequest(model, task, apiKey, stream, body, requestOptions);
+  return makeRequest(url, fetchOptions, fetchFn);
+}
+async function makeRequest(url, fetchOptions, fetchFn = fetch) {
+  let response;
+  try {
+    response = await fetchFn(url, fetchOptions);
+  } catch (e) {
+    handleResponseError(e, url);
+  }
+  if (!response.ok) {
+    await handleResponseNotOk(response, url);
+  }
+  return response;
+}
+function handleResponseError(e, url) {
+  let err = e;
+  if (err.name === "AbortError") {
+    err = new GoogleGenerativeAIAbortError(`Request aborted when fetching ${url.toString()}: ${e.message}`);
+    err.stack = e.stack;
+  } else if (!(e instanceof GoogleGenerativeAIFetchError || e instanceof GoogleGenerativeAIRequestInputError)) {
+    err = new GoogleGenerativeAIError(`Error fetching from ${url.toString()}: ${e.message}`);
+    err.stack = e.stack;
+  }
+  throw err;
+}
+async function handleResponseNotOk(response, url) {
+  let message = "";
+  let errorDetails;
+  try {
+    const json = await response.json();
+    message = json.error.message;
+    if (json.error.details) {
+      message += ` ${JSON.stringify(json.error.details)}`;
+      errorDetails = json.error.details;
+    }
+  } catch (e) {
+  }
+  throw new GoogleGenerativeAIFetchError(`Error fetching from ${url.toString()}: [${response.status} ${response.statusText}] ${message}`, response.status, response.statusText, errorDetails);
+}
+function buildFetchOptions(requestOptions) {
+  const fetchOptions = {};
+  if ((requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.signal) !== void 0 || (requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.timeout) >= 0) {
+    const controller = new AbortController();
+    if ((requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.timeout) >= 0) {
+      setTimeout(() => controller.abort(), requestOptions.timeout);
+    }
+    if (requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.signal) {
+      requestOptions.signal.addEventListener("abort", () => {
+        controller.abort();
+      });
+    }
+    fetchOptions.signal = controller.signal;
+  }
+  return fetchOptions;
+}
+function addHelpers(response) {
+  response.text = () => {
+    if (response.candidates && response.candidates.length > 0) {
+      if (response.candidates.length > 1) {
+        console.warn(`This response had ${response.candidates.length} candidates. Returning text from the first candidate only. Access response.candidates directly to use the other candidates.`);
+      }
+      if (hadBadFinishReason(response.candidates[0])) {
+        throw new GoogleGenerativeAIResponseError(`${formatBlockErrorMessage(response)}`, response);
+      }
+      return getText(response);
+    } else if (response.promptFeedback) {
+      throw new GoogleGenerativeAIResponseError(`Text not available. ${formatBlockErrorMessage(response)}`, response);
+    }
+    return "";
+  };
+  response.functionCall = () => {
+    if (response.candidates && response.candidates.length > 0) {
+      if (response.candidates.length > 1) {
+        console.warn(`This response had ${response.candidates.length} candidates. Returning function calls from the first candidate only. Access response.candidates directly to use the other candidates.`);
+      }
+      if (hadBadFinishReason(response.candidates[0])) {
+        throw new GoogleGenerativeAIResponseError(`${formatBlockErrorMessage(response)}`, response);
+      }
+      console.warn(`response.functionCall() is deprecated. Use response.functionCalls() instead.`);
+      return getFunctionCalls(response)[0];
+    } else if (response.promptFeedback) {
+      throw new GoogleGenerativeAIResponseError(`Function call not available. ${formatBlockErrorMessage(response)}`, response);
+    }
+    return void 0;
+  };
+  response.functionCalls = () => {
+    if (response.candidates && response.candidates.length > 0) {
+      if (response.candidates.length > 1) {
+        console.warn(`This response had ${response.candidates.length} candidates. Returning function calls from the first candidate only. Access response.candidates directly to use the other candidates.`);
+      }
+      if (hadBadFinishReason(response.candidates[0])) {
+        throw new GoogleGenerativeAIResponseError(`${formatBlockErrorMessage(response)}`, response);
+      }
+      return getFunctionCalls(response);
+    } else if (response.promptFeedback) {
+      throw new GoogleGenerativeAIResponseError(`Function call not available. ${formatBlockErrorMessage(response)}`, response);
+    }
+    return void 0;
+  };
+  return response;
+}
+function getText(response) {
+  var _a, _b, _c, _d;
+  const textStrings = [];
+  if ((_b = (_a = response.candidates) === null || _a === void 0 ? void 0 : _a[0].content) === null || _b === void 0 ? void 0 : _b.parts) {
+    for (const part of (_d = (_c = response.candidates) === null || _c === void 0 ? void 0 : _c[0].content) === null || _d === void 0 ? void 0 : _d.parts) {
+      if (part.text) {
+        textStrings.push(part.text);
+      }
+      if (part.executableCode) {
+        textStrings.push("\n```" + part.executableCode.language + "\n" + part.executableCode.code + "\n```\n");
+      }
+      if (part.codeExecutionResult) {
+        textStrings.push("\n```\n" + part.codeExecutionResult.output + "\n```\n");
+      }
+    }
+  }
+  if (textStrings.length > 0) {
+    return textStrings.join("");
+  } else {
+    return "";
+  }
+}
+function getFunctionCalls(response) {
+  var _a, _b, _c, _d;
+  const functionCalls = [];
+  if ((_b = (_a = response.candidates) === null || _a === void 0 ? void 0 : _a[0].content) === null || _b === void 0 ? void 0 : _b.parts) {
+    for (const part of (_d = (_c = response.candidates) === null || _c === void 0 ? void 0 : _c[0].content) === null || _d === void 0 ? void 0 : _d.parts) {
+      if (part.functionCall) {
+        functionCalls.push(part.functionCall);
+      }
+    }
+  }
+  if (functionCalls.length > 0) {
+    return functionCalls;
+  } else {
+    return void 0;
+  }
+}
+function hadBadFinishReason(candidate) {
+  return !!candidate.finishReason && badFinishReasons.includes(candidate.finishReason);
+}
+function formatBlockErrorMessage(response) {
+  var _a, _b, _c;
+  let message = "";
+  if ((!response.candidates || response.candidates.length === 0) && response.promptFeedback) {
+    message += "Response was blocked";
+    if ((_a = response.promptFeedback) === null || _a === void 0 ? void 0 : _a.blockReason) {
+      message += ` due to ${response.promptFeedback.blockReason}`;
+    }
+    if ((_b = response.promptFeedback) === null || _b === void 0 ? void 0 : _b.blockReasonMessage) {
+      message += `: ${response.promptFeedback.blockReasonMessage}`;
+    }
+  } else if ((_c = response.candidates) === null || _c === void 0 ? void 0 : _c[0]) {
+    const firstCandidate = response.candidates[0];
+    if (hadBadFinishReason(firstCandidate)) {
+      message += `Candidate was blocked due to ${firstCandidate.finishReason}`;
+      if (firstCandidate.finishMessage) {
+        message += `: ${firstCandidate.finishMessage}`;
+      }
+    }
+  }
+  return message;
+}
+function __await(v) {
+  return this instanceof __await ? (this.v = v, this) : new __await(v);
+}
+function __asyncGenerator(thisArg, _arguments, generator) {
+  if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+  var g = generator.apply(thisArg, _arguments || []), i, q = [];
+  return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
+    return this;
+  }, i;
+  function verb(n) {
+    if (g[n]) i[n] = function(v) {
+      return new Promise(function(a, b) {
+        q.push([n, v, a, b]) > 1 || resume(n, v);
+      });
+    };
+  }
+  function resume(n, v) {
+    try {
+      step(g[n](v));
+    } catch (e) {
+      settle(q[0][3], e);
+    }
+  }
+  function step(r) {
+    r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);
+  }
+  function fulfill(value) {
+    resume("next", value);
+  }
+  function reject(value) {
+    resume("throw", value);
+  }
+  function settle(f, v) {
+    if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]);
+  }
+}
+function processStream(response) {
+  const inputStream = response.body.pipeThrough(new TextDecoderStream("utf8", { fatal: true }));
+  const responseStream = getResponseStream(inputStream);
+  const [stream1, stream2] = responseStream.tee();
+  return {
+    stream: generateResponseSequence(stream1),
+    response: getResponsePromise(stream2)
+  };
+}
+async function getResponsePromise(stream) {
+  const allResponses = [];
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      return addHelpers(aggregateResponses(allResponses));
+    }
+    allResponses.push(value);
+  }
+}
+function generateResponseSequence(stream) {
+  return __asyncGenerator(this, arguments, function* generateResponseSequence_1() {
+    const reader = stream.getReader();
+    while (true) {
+      const { value, done } = yield __await(reader.read());
+      if (done) {
+        break;
+      }
+      yield yield __await(addHelpers(value));
+    }
+  });
+}
+function getResponseStream(inputStream) {
+  const reader = inputStream.getReader();
+  const stream = new ReadableStream({
+    start(controller) {
+      let currentText = "";
+      return pump();
+      function pump() {
+        return reader.read().then(({ value, done }) => {
+          if (done) {
+            if (currentText.trim()) {
+              controller.error(new GoogleGenerativeAIError("Failed to parse stream"));
+              return;
+            }
+            controller.close();
+            return;
+          }
+          currentText += value;
+          let match = currentText.match(responseLineRE);
+          let parsedResponse;
+          while (match) {
+            try {
+              parsedResponse = JSON.parse(match[1]);
+            } catch (e) {
+              controller.error(new GoogleGenerativeAIError(`Error parsing JSON response: "${match[1]}"`));
+              return;
+            }
+            controller.enqueue(parsedResponse);
+            currentText = currentText.substring(match[0].length);
+            match = currentText.match(responseLineRE);
+          }
+          return pump();
+        }).catch((e) => {
+          let err = e;
+          err.stack = e.stack;
+          if (err.name === "AbortError") {
+            err = new GoogleGenerativeAIAbortError("Request aborted when reading from the stream");
+          } else {
+            err = new GoogleGenerativeAIError("Error reading from the stream");
+          }
+          throw err;
+        });
+      }
+    }
+  });
+  return stream;
+}
+function aggregateResponses(responses) {
+  const lastResponse = responses[responses.length - 1];
+  const aggregatedResponse = {
+    promptFeedback: lastResponse === null || lastResponse === void 0 ? void 0 : lastResponse.promptFeedback
+  };
+  for (const response of responses) {
+    if (response.candidates) {
+      let candidateIndex = 0;
+      for (const candidate of response.candidates) {
+        if (!aggregatedResponse.candidates) {
+          aggregatedResponse.candidates = [];
+        }
+        if (!aggregatedResponse.candidates[candidateIndex]) {
+          aggregatedResponse.candidates[candidateIndex] = {
+            index: candidateIndex
+          };
+        }
+        aggregatedResponse.candidates[candidateIndex].citationMetadata = candidate.citationMetadata;
+        aggregatedResponse.candidates[candidateIndex].groundingMetadata = candidate.groundingMetadata;
+        aggregatedResponse.candidates[candidateIndex].finishReason = candidate.finishReason;
+        aggregatedResponse.candidates[candidateIndex].finishMessage = candidate.finishMessage;
+        aggregatedResponse.candidates[candidateIndex].safetyRatings = candidate.safetyRatings;
+        if (candidate.content && candidate.content.parts) {
+          if (!aggregatedResponse.candidates[candidateIndex].content) {
+            aggregatedResponse.candidates[candidateIndex].content = {
+              role: candidate.content.role || "user",
+              parts: []
+            };
+          }
+          const newPart = {};
+          for (const part of candidate.content.parts) {
+            if (part.text) {
+              newPart.text = part.text;
+            }
+            if (part.functionCall) {
+              newPart.functionCall = part.functionCall;
+            }
+            if (part.executableCode) {
+              newPart.executableCode = part.executableCode;
+            }
+            if (part.codeExecutionResult) {
+              newPart.codeExecutionResult = part.codeExecutionResult;
+            }
+            if (Object.keys(newPart).length === 0) {
+              newPart.text = "";
+            }
+            aggregatedResponse.candidates[candidateIndex].content.parts.push(newPart);
+          }
+        }
+      }
+      candidateIndex++;
+    }
+    if (response.usageMetadata) {
+      aggregatedResponse.usageMetadata = response.usageMetadata;
+    }
+  }
+  return aggregatedResponse;
+}
+async function generateContentStream(apiKey, model, params, requestOptions) {
+  const response = await makeModelRequest(
+    model,
+    Task.STREAM_GENERATE_CONTENT,
+    apiKey,
+    /* stream */
+    true,
+    JSON.stringify(params),
+    requestOptions
+  );
+  return processStream(response);
+}
+async function generateContent(apiKey, model, params, requestOptions) {
+  const response = await makeModelRequest(
+    model,
+    Task.GENERATE_CONTENT,
+    apiKey,
+    /* stream */
+    false,
+    JSON.stringify(params),
+    requestOptions
+  );
+  const responseJson = await response.json();
+  const enhancedResponse = addHelpers(responseJson);
+  return {
+    response: enhancedResponse
+  };
+}
+function formatSystemInstruction(input) {
+  if (input == null) {
+    return void 0;
+  } else if (typeof input === "string") {
+    return { role: "system", parts: [{ text: input }] };
+  } else if (input.text) {
+    return { role: "system", parts: [input] };
+  } else if (input.parts) {
+    if (!input.role) {
+      return { role: "system", parts: input.parts };
+    } else {
+      return input;
+    }
+  }
+}
+function formatNewContent(request) {
+  let newParts = [];
+  if (typeof request === "string") {
+    newParts = [{ text: request }];
+  } else {
+    for (const partOrString of request) {
+      if (typeof partOrString === "string") {
+        newParts.push({ text: partOrString });
+      } else {
+        newParts.push(partOrString);
+      }
+    }
+  }
+  return assignRoleToPartsAndValidateSendMessageRequest(newParts);
+}
+function assignRoleToPartsAndValidateSendMessageRequest(parts) {
+  const userContent = { role: "user", parts: [] };
+  const functionContent = { role: "function", parts: [] };
+  let hasUserContent = false;
+  let hasFunctionContent = false;
+  for (const part of parts) {
+    if ("functionResponse" in part) {
+      functionContent.parts.push(part);
+      hasFunctionContent = true;
+    } else {
+      userContent.parts.push(part);
+      hasUserContent = true;
+    }
+  }
+  if (hasUserContent && hasFunctionContent) {
+    throw new GoogleGenerativeAIError("Within a single message, FunctionResponse cannot be mixed with other type of part in the request for sending chat message.");
+  }
+  if (!hasUserContent && !hasFunctionContent) {
+    throw new GoogleGenerativeAIError("No content is provided for sending chat message.");
+  }
+  if (hasUserContent) {
+    return userContent;
+  }
+  return functionContent;
+}
+function formatCountTokensInput(params, modelParams) {
+  var _a;
+  let formattedGenerateContentRequest = {
+    model: modelParams === null || modelParams === void 0 ? void 0 : modelParams.model,
+    generationConfig: modelParams === null || modelParams === void 0 ? void 0 : modelParams.generationConfig,
+    safetySettings: modelParams === null || modelParams === void 0 ? void 0 : modelParams.safetySettings,
+    tools: modelParams === null || modelParams === void 0 ? void 0 : modelParams.tools,
+    toolConfig: modelParams === null || modelParams === void 0 ? void 0 : modelParams.toolConfig,
+    systemInstruction: modelParams === null || modelParams === void 0 ? void 0 : modelParams.systemInstruction,
+    cachedContent: (_a = modelParams === null || modelParams === void 0 ? void 0 : modelParams.cachedContent) === null || _a === void 0 ? void 0 : _a.name,
+    contents: []
+  };
+  const containsGenerateContentRequest = params.generateContentRequest != null;
+  if (params.contents) {
+    if (containsGenerateContentRequest) {
+      throw new GoogleGenerativeAIRequestInputError("CountTokensRequest must have one of contents or generateContentRequest, not both.");
+    }
+    formattedGenerateContentRequest.contents = params.contents;
+  } else if (containsGenerateContentRequest) {
+    formattedGenerateContentRequest = Object.assign(Object.assign({}, formattedGenerateContentRequest), params.generateContentRequest);
+  } else {
+    const content = formatNewContent(params);
+    formattedGenerateContentRequest.contents = [content];
+  }
+  return { generateContentRequest: formattedGenerateContentRequest };
+}
+function formatGenerateContentInput(params) {
+  let formattedRequest;
+  if (params.contents) {
+    formattedRequest = params;
+  } else {
+    const content = formatNewContent(params);
+    formattedRequest = { contents: [content] };
+  }
+  if (params.systemInstruction) {
+    formattedRequest.systemInstruction = formatSystemInstruction(params.systemInstruction);
+  }
+  return formattedRequest;
+}
+function formatEmbedContentInput(params) {
+  if (typeof params === "string" || Array.isArray(params)) {
+    const content = formatNewContent(params);
+    return { content };
+  }
+  return params;
+}
+function validateChatHistory(history) {
+  let prevContent = false;
+  for (const currContent of history) {
+    const { role, parts } = currContent;
+    if (!prevContent && role !== "user") {
+      throw new GoogleGenerativeAIError(`First content should be with role 'user', got ${role}`);
+    }
+    if (!POSSIBLE_ROLES.includes(role)) {
+      throw new GoogleGenerativeAIError(`Each item should include role field. Got ${role} but valid roles are: ${JSON.stringify(POSSIBLE_ROLES)}`);
+    }
+    if (!Array.isArray(parts)) {
+      throw new GoogleGenerativeAIError("Content should have 'parts' property with an array of Parts");
+    }
+    if (parts.length === 0) {
+      throw new GoogleGenerativeAIError("Each Content should have at least one part");
+    }
+    const countFields = {
+      text: 0,
+      inlineData: 0,
+      functionCall: 0,
+      functionResponse: 0,
+      fileData: 0,
+      executableCode: 0,
+      codeExecutionResult: 0
+    };
+    for (const part of parts) {
+      for (const key of VALID_PART_FIELDS) {
+        if (key in part) {
+          countFields[key] += 1;
+        }
+      }
+    }
+    const validParts = VALID_PARTS_PER_ROLE[role];
+    for (const key of VALID_PART_FIELDS) {
+      if (!validParts.includes(key) && countFields[key] > 0) {
+        throw new GoogleGenerativeAIError(`Content with role '${role}' can't contain '${key}' part`);
+      }
+    }
+    prevContent = true;
+  }
+}
+function isValidResponse(response) {
+  var _a;
+  if (response.candidates === void 0 || response.candidates.length === 0) {
+    return false;
+  }
+  const content = (_a = response.candidates[0]) === null || _a === void 0 ? void 0 : _a.content;
+  if (content === void 0) {
+    return false;
+  }
+  if (content.parts === void 0 || content.parts.length === 0) {
+    return false;
+  }
+  for (const part of content.parts) {
+    if (part === void 0 || Object.keys(part).length === 0) {
+      return false;
+    }
+    if (part.text !== void 0 && part.text === "") {
+      return false;
+    }
+  }
+  return true;
+}
+async function countTokens(apiKey, model, params, singleRequestOptions) {
+  const response = await makeModelRequest(model, Task.COUNT_TOKENS, apiKey, false, JSON.stringify(params), singleRequestOptions);
+  return response.json();
+}
+async function embedContent(apiKey, model, params, requestOptions) {
+  const response = await makeModelRequest(model, Task.EMBED_CONTENT, apiKey, false, JSON.stringify(params), requestOptions);
+  return response.json();
+}
+async function batchEmbedContents(apiKey, model, params, requestOptions) {
+  const requestsWithModel = params.requests.map((request) => {
+    return Object.assign(Object.assign({}, request), { model });
+  });
+  const response = await makeModelRequest(model, Task.BATCH_EMBED_CONTENTS, apiKey, false, JSON.stringify({ requests: requestsWithModel }), requestOptions);
+  return response.json();
+}
+var SchemaType, ExecutableCodeLanguage, Outcome, POSSIBLE_ROLES, HarmCategory, HarmBlockThreshold, HarmProbability, BlockReason, FinishReason, TaskType, FunctionCallingMode, DynamicRetrievalMode, GoogleGenerativeAIError, GoogleGenerativeAIResponseError, GoogleGenerativeAIFetchError, GoogleGenerativeAIRequestInputError, GoogleGenerativeAIAbortError, DEFAULT_BASE_URL, DEFAULT_API_VERSION, PACKAGE_VERSION, PACKAGE_LOG_HEADER, Task, RequestUrl, badFinishReasons, responseLineRE, VALID_PART_FIELDS, VALID_PARTS_PER_ROLE, SILENT_ERROR, ChatSession, GenerativeModel, GoogleGenerativeAI;
+var init_dist = __esm({
+  "node_modules/@google/generative-ai/dist/index.mjs"() {
+    (function(SchemaType2) {
+      SchemaType2["STRING"] = "string";
+      SchemaType2["NUMBER"] = "number";
+      SchemaType2["INTEGER"] = "integer";
+      SchemaType2["BOOLEAN"] = "boolean";
+      SchemaType2["ARRAY"] = "array";
+      SchemaType2["OBJECT"] = "object";
+    })(SchemaType || (SchemaType = {}));
+    (function(ExecutableCodeLanguage2) {
+      ExecutableCodeLanguage2["LANGUAGE_UNSPECIFIED"] = "language_unspecified";
+      ExecutableCodeLanguage2["PYTHON"] = "python";
+    })(ExecutableCodeLanguage || (ExecutableCodeLanguage = {}));
+    (function(Outcome2) {
+      Outcome2["OUTCOME_UNSPECIFIED"] = "outcome_unspecified";
+      Outcome2["OUTCOME_OK"] = "outcome_ok";
+      Outcome2["OUTCOME_FAILED"] = "outcome_failed";
+      Outcome2["OUTCOME_DEADLINE_EXCEEDED"] = "outcome_deadline_exceeded";
+    })(Outcome || (Outcome = {}));
+    POSSIBLE_ROLES = ["user", "model", "function", "system"];
+    (function(HarmCategory2) {
+      HarmCategory2["HARM_CATEGORY_UNSPECIFIED"] = "HARM_CATEGORY_UNSPECIFIED";
+      HarmCategory2["HARM_CATEGORY_HATE_SPEECH"] = "HARM_CATEGORY_HATE_SPEECH";
+      HarmCategory2["HARM_CATEGORY_SEXUALLY_EXPLICIT"] = "HARM_CATEGORY_SEXUALLY_EXPLICIT";
+      HarmCategory2["HARM_CATEGORY_HARASSMENT"] = "HARM_CATEGORY_HARASSMENT";
+      HarmCategory2["HARM_CATEGORY_DANGEROUS_CONTENT"] = "HARM_CATEGORY_DANGEROUS_CONTENT";
+      HarmCategory2["HARM_CATEGORY_CIVIC_INTEGRITY"] = "HARM_CATEGORY_CIVIC_INTEGRITY";
+    })(HarmCategory || (HarmCategory = {}));
+    (function(HarmBlockThreshold2) {
+      HarmBlockThreshold2["HARM_BLOCK_THRESHOLD_UNSPECIFIED"] = "HARM_BLOCK_THRESHOLD_UNSPECIFIED";
+      HarmBlockThreshold2["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
+      HarmBlockThreshold2["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
+      HarmBlockThreshold2["BLOCK_ONLY_HIGH"] = "BLOCK_ONLY_HIGH";
+      HarmBlockThreshold2["BLOCK_NONE"] = "BLOCK_NONE";
+    })(HarmBlockThreshold || (HarmBlockThreshold = {}));
+    (function(HarmProbability2) {
+      HarmProbability2["HARM_PROBABILITY_UNSPECIFIED"] = "HARM_PROBABILITY_UNSPECIFIED";
+      HarmProbability2["NEGLIGIBLE"] = "NEGLIGIBLE";
+      HarmProbability2["LOW"] = "LOW";
+      HarmProbability2["MEDIUM"] = "MEDIUM";
+      HarmProbability2["HIGH"] = "HIGH";
+    })(HarmProbability || (HarmProbability = {}));
+    (function(BlockReason2) {
+      BlockReason2["BLOCKED_REASON_UNSPECIFIED"] = "BLOCKED_REASON_UNSPECIFIED";
+      BlockReason2["SAFETY"] = "SAFETY";
+      BlockReason2["OTHER"] = "OTHER";
+    })(BlockReason || (BlockReason = {}));
+    (function(FinishReason2) {
+      FinishReason2["FINISH_REASON_UNSPECIFIED"] = "FINISH_REASON_UNSPECIFIED";
+      FinishReason2["STOP"] = "STOP";
+      FinishReason2["MAX_TOKENS"] = "MAX_TOKENS";
+      FinishReason2["SAFETY"] = "SAFETY";
+      FinishReason2["RECITATION"] = "RECITATION";
+      FinishReason2["LANGUAGE"] = "LANGUAGE";
+      FinishReason2["BLOCKLIST"] = "BLOCKLIST";
+      FinishReason2["PROHIBITED_CONTENT"] = "PROHIBITED_CONTENT";
+      FinishReason2["SPII"] = "SPII";
+      FinishReason2["MALFORMED_FUNCTION_CALL"] = "MALFORMED_FUNCTION_CALL";
+      FinishReason2["OTHER"] = "OTHER";
+    })(FinishReason || (FinishReason = {}));
+    (function(TaskType2) {
+      TaskType2["TASK_TYPE_UNSPECIFIED"] = "TASK_TYPE_UNSPECIFIED";
+      TaskType2["RETRIEVAL_QUERY"] = "RETRIEVAL_QUERY";
+      TaskType2["RETRIEVAL_DOCUMENT"] = "RETRIEVAL_DOCUMENT";
+      TaskType2["SEMANTIC_SIMILARITY"] = "SEMANTIC_SIMILARITY";
+      TaskType2["CLASSIFICATION"] = "CLASSIFICATION";
+      TaskType2["CLUSTERING"] = "CLUSTERING";
+    })(TaskType || (TaskType = {}));
+    (function(FunctionCallingMode2) {
+      FunctionCallingMode2["MODE_UNSPECIFIED"] = "MODE_UNSPECIFIED";
+      FunctionCallingMode2["AUTO"] = "AUTO";
+      FunctionCallingMode2["ANY"] = "ANY";
+      FunctionCallingMode2["NONE"] = "NONE";
+    })(FunctionCallingMode || (FunctionCallingMode = {}));
+    (function(DynamicRetrievalMode2) {
+      DynamicRetrievalMode2["MODE_UNSPECIFIED"] = "MODE_UNSPECIFIED";
+      DynamicRetrievalMode2["MODE_DYNAMIC"] = "MODE_DYNAMIC";
+    })(DynamicRetrievalMode || (DynamicRetrievalMode = {}));
+    GoogleGenerativeAIError = class extends Error {
+      constructor(message) {
+        super(`[GoogleGenerativeAI Error]: ${message}`);
+      }
+    };
+    GoogleGenerativeAIResponseError = class extends GoogleGenerativeAIError {
+      constructor(message, response) {
+        super(message);
+        this.response = response;
+      }
+    };
+    GoogleGenerativeAIFetchError = class extends GoogleGenerativeAIError {
+      constructor(message, status, statusText, errorDetails) {
+        super(message);
+        this.status = status;
+        this.statusText = statusText;
+        this.errorDetails = errorDetails;
+      }
+    };
+    GoogleGenerativeAIRequestInputError = class extends GoogleGenerativeAIError {
+    };
+    GoogleGenerativeAIAbortError = class extends GoogleGenerativeAIError {
+    };
+    DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
+    DEFAULT_API_VERSION = "v1beta";
+    PACKAGE_VERSION = "0.24.1";
+    PACKAGE_LOG_HEADER = "genai-js";
+    (function(Task2) {
+      Task2["GENERATE_CONTENT"] = "generateContent";
+      Task2["STREAM_GENERATE_CONTENT"] = "streamGenerateContent";
+      Task2["COUNT_TOKENS"] = "countTokens";
+      Task2["EMBED_CONTENT"] = "embedContent";
+      Task2["BATCH_EMBED_CONTENTS"] = "batchEmbedContents";
+    })(Task || (Task = {}));
+    RequestUrl = class {
+      constructor(model, task, apiKey, stream, requestOptions) {
+        this.model = model;
+        this.task = task;
+        this.apiKey = apiKey;
+        this.stream = stream;
+        this.requestOptions = requestOptions;
+      }
+      toString() {
+        var _a, _b;
+        const apiVersion = ((_a = this.requestOptions) === null || _a === void 0 ? void 0 : _a.apiVersion) || DEFAULT_API_VERSION;
+        const baseUrl = ((_b = this.requestOptions) === null || _b === void 0 ? void 0 : _b.baseUrl) || DEFAULT_BASE_URL;
+        let url = `${baseUrl}/${apiVersion}/${this.model}:${this.task}`;
+        if (this.stream) {
+          url += "?alt=sse";
+        }
+        return url;
+      }
+    };
+    badFinishReasons = [
+      FinishReason.RECITATION,
+      FinishReason.SAFETY,
+      FinishReason.LANGUAGE
+    ];
+    responseLineRE = /^data\: (.*)(?:\n\n|\r\r|\r\n\r\n)/;
+    VALID_PART_FIELDS = [
+      "text",
+      "inlineData",
+      "functionCall",
+      "functionResponse",
+      "executableCode",
+      "codeExecutionResult"
+    ];
+    VALID_PARTS_PER_ROLE = {
+      user: ["text", "inlineData"],
+      function: ["functionResponse"],
+      model: ["text", "functionCall", "executableCode", "codeExecutionResult"],
+      // System instructions shouldn't be in history anyway.
+      system: ["text"]
+    };
+    SILENT_ERROR = "SILENT_ERROR";
+    ChatSession = class {
+      constructor(apiKey, model, params, _requestOptions = {}) {
+        this.model = model;
+        this.params = params;
+        this._requestOptions = _requestOptions;
+        this._history = [];
+        this._sendPromise = Promise.resolve();
+        this._apiKey = apiKey;
+        if (params === null || params === void 0 ? void 0 : params.history) {
+          validateChatHistory(params.history);
+          this._history = params.history;
+        }
+      }
+      /**
+       * Gets the chat history so far. Blocked prompts are not added to history.
+       * Blocked candidates are not added to history, nor are the prompts that
+       * generated them.
+       */
+      async getHistory() {
+        await this._sendPromise;
+        return this._history;
+      }
+      /**
+       * Sends a chat message and receives a non-streaming
+       * {@link GenerateContentResult}.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async sendMessage(request, requestOptions = {}) {
+        var _a, _b, _c, _d, _e, _f;
+        await this._sendPromise;
+        const newContent = formatNewContent(request);
+        const generateContentRequest = {
+          safetySettings: (_a = this.params) === null || _a === void 0 ? void 0 : _a.safetySettings,
+          generationConfig: (_b = this.params) === null || _b === void 0 ? void 0 : _b.generationConfig,
+          tools: (_c = this.params) === null || _c === void 0 ? void 0 : _c.tools,
+          toolConfig: (_d = this.params) === null || _d === void 0 ? void 0 : _d.toolConfig,
+          systemInstruction: (_e = this.params) === null || _e === void 0 ? void 0 : _e.systemInstruction,
+          cachedContent: (_f = this.params) === null || _f === void 0 ? void 0 : _f.cachedContent,
+          contents: [...this._history, newContent]
+        };
+        const chatSessionRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        let finalResult;
+        this._sendPromise = this._sendPromise.then(() => generateContent(this._apiKey, this.model, generateContentRequest, chatSessionRequestOptions)).then((result) => {
+          var _a2;
+          if (isValidResponse(result.response)) {
+            this._history.push(newContent);
+            const responseContent = Object.assign({
+              parts: [],
+              // Response seems to come back without a role set.
+              role: "model"
+            }, (_a2 = result.response.candidates) === null || _a2 === void 0 ? void 0 : _a2[0].content);
+            this._history.push(responseContent);
+          } else {
+            const blockErrorMessage = formatBlockErrorMessage(result.response);
+            if (blockErrorMessage) {
+              console.warn(`sendMessage() was unsuccessful. ${blockErrorMessage}. Inspect response object for details.`);
+            }
+          }
+          finalResult = result;
+        }).catch((e) => {
+          this._sendPromise = Promise.resolve();
+          throw e;
+        });
+        await this._sendPromise;
+        return finalResult;
+      }
+      /**
+       * Sends a chat message and receives the response as a
+       * {@link GenerateContentStreamResult} containing an iterable stream
+       * and a response promise.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async sendMessageStream(request, requestOptions = {}) {
+        var _a, _b, _c, _d, _e, _f;
+        await this._sendPromise;
+        const newContent = formatNewContent(request);
+        const generateContentRequest = {
+          safetySettings: (_a = this.params) === null || _a === void 0 ? void 0 : _a.safetySettings,
+          generationConfig: (_b = this.params) === null || _b === void 0 ? void 0 : _b.generationConfig,
+          tools: (_c = this.params) === null || _c === void 0 ? void 0 : _c.tools,
+          toolConfig: (_d = this.params) === null || _d === void 0 ? void 0 : _d.toolConfig,
+          systemInstruction: (_e = this.params) === null || _e === void 0 ? void 0 : _e.systemInstruction,
+          cachedContent: (_f = this.params) === null || _f === void 0 ? void 0 : _f.cachedContent,
+          contents: [...this._history, newContent]
+        };
+        const chatSessionRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        const streamPromise = generateContentStream(this._apiKey, this.model, generateContentRequest, chatSessionRequestOptions);
+        this._sendPromise = this._sendPromise.then(() => streamPromise).catch((_ignored) => {
+          throw new Error(SILENT_ERROR);
+        }).then((streamResult) => streamResult.response).then((response) => {
+          if (isValidResponse(response)) {
+            this._history.push(newContent);
+            const responseContent = Object.assign({}, response.candidates[0].content);
+            if (!responseContent.role) {
+              responseContent.role = "model";
+            }
+            this._history.push(responseContent);
+          } else {
+            const blockErrorMessage = formatBlockErrorMessage(response);
+            if (blockErrorMessage) {
+              console.warn(`sendMessageStream() was unsuccessful. ${blockErrorMessage}. Inspect response object for details.`);
+            }
+          }
+        }).catch((e) => {
+          if (e.message !== SILENT_ERROR) {
+            console.error(e);
+          }
+        });
+        return streamPromise;
+      }
+    };
+    GenerativeModel = class {
+      constructor(apiKey, modelParams, _requestOptions = {}) {
+        this.apiKey = apiKey;
+        this._requestOptions = _requestOptions;
+        if (modelParams.model.includes("/")) {
+          this.model = modelParams.model;
+        } else {
+          this.model = `models/${modelParams.model}`;
+        }
+        this.generationConfig = modelParams.generationConfig || {};
+        this.safetySettings = modelParams.safetySettings || [];
+        this.tools = modelParams.tools;
+        this.toolConfig = modelParams.toolConfig;
+        this.systemInstruction = formatSystemInstruction(modelParams.systemInstruction);
+        this.cachedContent = modelParams.cachedContent;
+      }
+      /**
+       * Makes a single non-streaming call to the model
+       * and returns an object containing a single {@link GenerateContentResponse}.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async generateContent(request, requestOptions = {}) {
+        var _a;
+        const formattedParams = formatGenerateContentInput(request);
+        const generativeModelRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        return generateContent(this.apiKey, this.model, Object.assign({ generationConfig: this.generationConfig, safetySettings: this.safetySettings, tools: this.tools, toolConfig: this.toolConfig, systemInstruction: this.systemInstruction, cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name }, formattedParams), generativeModelRequestOptions);
+      }
+      /**
+       * Makes a single streaming call to the model and returns an object
+       * containing an iterable stream that iterates over all chunks in the
+       * streaming response as well as a promise that returns the final
+       * aggregated response.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async generateContentStream(request, requestOptions = {}) {
+        var _a;
+        const formattedParams = formatGenerateContentInput(request);
+        const generativeModelRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        return generateContentStream(this.apiKey, this.model, Object.assign({ generationConfig: this.generationConfig, safetySettings: this.safetySettings, tools: this.tools, toolConfig: this.toolConfig, systemInstruction: this.systemInstruction, cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name }, formattedParams), generativeModelRequestOptions);
+      }
+      /**
+       * Gets a new {@link ChatSession} instance which can be used for
+       * multi-turn chats.
+       */
+      startChat(startChatParams) {
+        var _a;
+        return new ChatSession(this.apiKey, this.model, Object.assign({ generationConfig: this.generationConfig, safetySettings: this.safetySettings, tools: this.tools, toolConfig: this.toolConfig, systemInstruction: this.systemInstruction, cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name }, startChatParams), this._requestOptions);
+      }
+      /**
+       * Counts the tokens in the provided request.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async countTokens(request, requestOptions = {}) {
+        const formattedParams = formatCountTokensInput(request, {
+          model: this.model,
+          generationConfig: this.generationConfig,
+          safetySettings: this.safetySettings,
+          tools: this.tools,
+          toolConfig: this.toolConfig,
+          systemInstruction: this.systemInstruction,
+          cachedContent: this.cachedContent
+        });
+        const generativeModelRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        return countTokens(this.apiKey, this.model, formattedParams, generativeModelRequestOptions);
+      }
+      /**
+       * Embeds the provided content.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async embedContent(request, requestOptions = {}) {
+        const formattedParams = formatEmbedContentInput(request);
+        const generativeModelRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        return embedContent(this.apiKey, this.model, formattedParams, generativeModelRequestOptions);
+      }
+      /**
+       * Embeds an array of {@link EmbedContentRequest}s.
+       *
+       * Fields set in the optional {@link SingleRequestOptions} parameter will
+       * take precedence over the {@link RequestOptions} values provided to
+       * {@link GoogleGenerativeAI.getGenerativeModel }.
+       */
+      async batchEmbedContents(batchEmbedContentRequest, requestOptions = {}) {
+        const generativeModelRequestOptions = Object.assign(Object.assign({}, this._requestOptions), requestOptions);
+        return batchEmbedContents(this.apiKey, this.model, batchEmbedContentRequest, generativeModelRequestOptions);
+      }
+    };
+    GoogleGenerativeAI = class {
+      constructor(apiKey) {
+        this.apiKey = apiKey;
+      }
+      /**
+       * Gets a {@link GenerativeModel} instance for the provided model name.
+       */
+      getGenerativeModel(modelParams, requestOptions) {
+        if (!modelParams.model) {
+          throw new GoogleGenerativeAIError(`Must provide a model name. Example: genai.getGenerativeModel({ model: 'my-model-name' })`);
+        }
+        return new GenerativeModel(this.apiKey, modelParams, requestOptions);
+      }
+      /**
+       * Creates a {@link GenerativeModel} instance from provided content cache.
+       */
+      getGenerativeModelFromCachedContent(cachedContent, modelParams, requestOptions) {
+        if (!cachedContent.name) {
+          throw new GoogleGenerativeAIRequestInputError("Cached content must contain a `name` field.");
+        }
+        if (!cachedContent.model) {
+          throw new GoogleGenerativeAIRequestInputError("Cached content must contain a `model` field.");
+        }
+        const disallowedDuplicates = ["model", "systemInstruction"];
+        for (const key of disallowedDuplicates) {
+          if ((modelParams === null || modelParams === void 0 ? void 0 : modelParams[key]) && cachedContent[key] && (modelParams === null || modelParams === void 0 ? void 0 : modelParams[key]) !== cachedContent[key]) {
+            if (key === "model") {
+              const modelParamsComp = modelParams.model.startsWith("models/") ? modelParams.model.replace("models/", "") : modelParams.model;
+              const cachedContentComp = cachedContent.model.startsWith("models/") ? cachedContent.model.replace("models/", "") : cachedContent.model;
+              if (modelParamsComp === cachedContentComp) {
+                continue;
+              }
+            }
+            throw new GoogleGenerativeAIRequestInputError(`Different value for "${key}" specified in modelParams (${modelParams[key]}) and cachedContent (${cachedContent[key]})`);
+          }
+        }
+        const modelParamsFromCache = Object.assign(Object.assign({}, modelParams), { model: cachedContent.model, tools: cachedContent.tools, toolConfig: cachedContent.toolConfig, systemInstruction: cachedContent.systemInstruction, cachedContent });
+        return new GenerativeModel(this.apiKey, modelParamsFromCache, requestOptions);
+      }
+    };
+  }
+});
+
+// src/core/paths.ts
+import os from "os";
+import path from "path";
+import fs from "fs";
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getSuperpowersDir() {
+  let dir;
+  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
+    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
+  } else if (process.env.MEMMEM_CONFIG_DIR) {
+    dir = process.env.MEMMEM_CONFIG_DIR;
+  } else {
+    dir = path.join(os.homedir(), ".config", "memmem");
+  }
+  return ensureDir(dir);
+}
+function getIndexDir() {
+  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
+}
+function getDbPath() {
+  if (process.env.CONVERSATION_MEMORY_DB_PATH) {
+    return process.env.CONVERSATION_MEMORY_DB_PATH;
+  }
+  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
+    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
+  }
+  return path.join(getIndexDir(), "conversations.db");
+}
+function getLogDir() {
+  return ensureDir(path.join(getSuperpowersDir(), "logs"));
+}
+function getLogFilePath() {
+  const date3 = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  return path.join(getLogDir(), `${date3}.log`);
+}
+var init_paths = __esm({
+  "src/core/paths.ts"() {
+    "use strict";
+  }
+});
+
+// src/core/logger.ts
+import fs2 from "fs";
+function formatLogEntry(entry) {
+  const dataStr = entry.data ? ` ${JSON.stringify(entry.data)}` : "";
+  return `[${entry.timestamp}] [${entry.level}] ${entry.message}${dataStr}`;
+}
+function writeLog(entry) {
+  const logPath = getLogFilePath();
+  const line = formatLogEntry(entry) + "\n";
+  fs2.appendFileSync(logPath, line, "utf-8");
+}
+function logInfo(message, data) {
+  const entry = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    level: "INFO" /* INFO */,
+    message,
+    data
+  };
+  writeLog(entry);
+  console.log(`[INFO] ${message}`);
+}
+function logError(message, error2, data) {
+  const errorData = error2 instanceof Error ? {
+    name: error2.name,
+    message: error2.message,
+    stack: error2.stack
+  } : error2;
+  const entry = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    level: "ERROR" /* ERROR */,
+    message,
+    data: data ? { ...data, error: errorData } : { error: errorData }
+  };
+  writeLog(entry);
+}
+function logDebug(message, data) {
+  if (process.env.CONVERSATION_MEMORY_DEBUG !== "true") {
+    return;
+  }
+  const entry = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    level: "DEBUG" /* DEBUG */,
+    message,
+    data
+  };
+  writeLog(entry);
+  console.log(`[DEBUG] ${message}`, data);
+}
+var init_logger = __esm({
+  "src/core/logger.ts"() {
+    "use strict";
+    init_paths();
+  }
+});
+
+// src/core/llm/gemini-provider.ts
+var gemini_provider_exports = {};
+__export(gemini_provider_exports, {
+  GeminiProvider: () => GeminiProvider
+});
+var DEFAULT_MODEL, GeminiProvider;
+var init_gemini_provider = __esm({
+  "src/core/llm/gemini-provider.ts"() {
+    "use strict";
+    init_dist();
+    init_logger();
+    init_ratelimiter();
+    DEFAULT_MODEL = "gemini-2.0-flash";
+    GeminiProvider = class {
+      client;
+      model;
+      /**
+       * Creates a new GeminiProvider instance.
+       *
+       * @param apiKey - Google API key for authentication
+       * @param model - Model name to use (default: gemini-2.0-flash)
+       * @throws {Error} If API key is not provided
+       */
+      constructor(apiKey, model = DEFAULT_MODEL) {
+        if (!apiKey) {
+          throw new Error("GeminiProvider requires an API key");
+        }
+        this.client = new GoogleGenerativeAI(apiKey);
+        this.model = model;
+      }
+      /**
+       * Completes a prompt using the Gemini API.
+       *
+       * @param prompt - The user prompt to complete
+       * @param options - Optional configuration for the completion
+       * @returns Promise resolving to the completion result with token usage
+       * @throws {Error} If the API call fails
+       */
+      async complete(prompt, options) {
+        await getLLMRateLimiter().acquire();
+        const startTime = Date.now();
+        logInfo("[GeminiProvider] Starting completion", {
+          model: this.model,
+          promptLength: prompt.length,
+          maxTokens: options?.maxTokens
+        });
+        try {
+          const generationConfig = {};
+          if (options?.maxTokens) {
+            generationConfig.maxOutputTokens = options.maxTokens;
+          }
+          const modelParams = { model: this.model };
+          if (options?.systemPrompt) {
+            modelParams.systemInstruction = options.systemPrompt;
+          }
+          if (Object.keys(generationConfig).length > 0) {
+            modelParams.generationConfig = generationConfig;
+          }
+          logDebug("[GeminiProvider] Sending request", {
+            model: this.model,
+            hasSystemPrompt: !!options?.systemPrompt
+          });
+          const generativeModel = this.client.getGenerativeModel(modelParams);
+          const result = await generativeModel.generateContent(prompt);
+          const duration3 = Date.now() - startTime;
+          const parsed = this.parseResult(result);
+          logInfo("[GeminiProvider] Completion successful", {
+            duration: duration3,
+            inputTokens: parsed.usage.input_tokens,
+            outputTokens: parsed.usage.output_tokens,
+            responseLength: parsed.text.length
+          });
+          return parsed;
+        } catch (error2) {
+          const duration3 = Date.now() - startTime;
+          logError("[GeminiProvider] Completion failed", error2, {
+            model: this.model,
+            duration: duration3
+          });
+          throw new Error(
+            `Gemini API call failed: ${error2 instanceof Error ? error2.message : String(error2)}`
+          );
+        }
+      }
+      /**
+       * Parses a Gemini API response into an LLMResult.
+       *
+       * @param result - The raw API response from Gemini
+       * @returns Parsed LLM result with text and token usage
+       */
+      parseResult(result) {
+        const response = result.response;
+        const text = response.text() ?? "";
+        const usage = this.extractUsage(response);
+        return { text, usage };
+      }
+      /**
+       * Extracts token usage information from a Gemini API response.
+       *
+       * Note: Gemini API may not return cache-related token usage fields.
+       * These fields will be undefined in the returned TokenUsage object.
+       *
+       * @param response - The response object from Gemini
+       * @returns Token usage information
+       */
+      extractUsage(response) {
+        const usageMetadata = response.usageMetadata;
+        return {
+          input_tokens: usageMetadata?.promptTokenCount ?? 0,
+          output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
+          // Gemini doesn't provide cache-related token usage
+          cache_read_input_tokens: void 0,
+          cache_creation_input_tokens: void 0
+        };
+      }
+    };
+  }
+});
+
+// src/core/llm/zai-provider.ts
+var zai_provider_exports = {};
+__export(zai_provider_exports, {
+  ZAIProvider: () => ZAIProvider
+});
+var DEFAULT_MODEL2, DEFAULT_BASE_URL2, ZAIProvider;
+var init_zai_provider = __esm({
+  "src/core/llm/zai-provider.ts"() {
+    "use strict";
+    init_logger();
+    init_ratelimiter();
+    DEFAULT_MODEL2 = "glm-4.5-air";
+    DEFAULT_BASE_URL2 = "https://api.z.ai/api/coding/paas/v4";
+    ZAIProvider = class {
+      apiKey;
+      model;
+      baseUrl;
+      /**
+       * Creates a new ZAIProvider instance.
+       *
+       * @param apiKey - Z.AI API key for authentication
+       * @param model - Model name to use (default: glm-4.7)
+       * @param baseUrl - Base URL for API (default: https://api.z.ai/api/paas/v4)
+       * @throws {Error} If API key is not provided
+       */
+      constructor(apiKey, model = DEFAULT_MODEL2, baseUrl = DEFAULT_BASE_URL2) {
+        if (!apiKey) {
+          throw new Error("ZAIProvider requires an API key");
+        }
+        this.apiKey = apiKey;
+        this.model = model;
+        this.baseUrl = baseUrl;
+      }
+      /**
+       * Completes a prompt using the Z.AI API.
+       *
+       * @param prompt - The user prompt to complete
+       * @param options - Optional configuration for the completion
+       * @returns Promise resolving to the completion result with token usage
+       * @throws {Error} If the API call fails
+       */
+      async complete(prompt, options) {
+        await getLLMRateLimiter().acquire();
+        const startTime = Date.now();
+        logInfo("[ZAIProvider] Starting completion", {
+          model: this.model,
+          promptLength: prompt.length,
+          maxTokens: options?.maxTokens
+        });
+        try {
+          const messages = [];
+          if (options?.systemPrompt) {
+            messages.push({ role: "system", content: options.systemPrompt });
+          }
+          messages.push({ role: "user", content: prompt });
+          const requestBody = {
+            model: this.model,
+            messages,
+            temperature: 1,
+            max_tokens: options?.maxTokens,
+            stream: false
+          };
+          logDebug("[ZAIProvider] Sending request", {
+            model: this.model,
+            messagesCount: messages.length,
+            hasSystemPrompt: !!options?.systemPrompt
+          });
+          const response = await fetch(`${this.baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${this.apiKey}`,
+              "Content-Type": "application/json",
+              "Accept-Language": "en-US,en"
+            },
+            body: JSON.stringify(requestBody)
+          });
+          if (!response.ok) {
+            let errorData = {};
+            try {
+              errorData = await response.json();
+            } catch {
+            }
+            const errorMessage = errorData.error?.message || response.statusText;
+            throw new Error(`Z.AI API request failed (${response.status}): ${errorMessage}`);
+          }
+          const data = await response.json();
+          const duration3 = Date.now() - startTime;
+          const text = data.choices?.[0]?.message?.content ?? "";
+          const usage = this.extractUsage(data);
+          logInfo("[ZAIProvider] Completion successful", {
+            duration: duration3,
+            inputTokens: usage.input_tokens,
+            outputTokens: usage.output_tokens,
+            responseLength: text.length
+          });
+          return { text, usage };
+        } catch (error2) {
+          const duration3 = Date.now() - startTime;
+          logError("[ZAIProvider] Completion failed", error2, {
+            model: this.model,
+            duration: duration3
+          });
+          throw error2;
+        }
+      }
+      /**
+       * Extracts token usage information from a Z.AI API response.
+       *
+       * @param response - The response object from Z.AI
+       * @returns Token usage information
+       */
+      extractUsage(response) {
+        const usage = response.usage;
+        return {
+          input_tokens: usage?.prompt_tokens ?? 0,
+          output_tokens: usage?.completion_tokens ?? 0,
+          // Z.AI doesn't provide cache-related token usage
+          cache_read_input_tokens: void 0,
+          cache_creation_input_tokens: void 0
+        };
+      }
+    };
   }
 });
 
@@ -6820,9 +8165,29 @@ function loadConfig() {
     return null;
   }
 }
+async function createProvider(config2) {
+  const { provider, apiKey, model } = config2;
+  if (!apiKey) {
+    throw new Error("Provider requires an apiKey");
+  }
+  const defaultModel = model ?? DEFAULT_MODELS[provider];
+  if (provider === "gemini") {
+    const { GeminiProvider: GeminiProvider2 } = await Promise.resolve().then(() => (init_gemini_provider(), gemini_provider_exports));
+    return new GeminiProvider2(apiKey, defaultModel);
+  } else if (provider === "zai") {
+    const { ZAIProvider: ZAIProvider2 } = await Promise.resolve().then(() => (init_zai_provider(), zai_provider_exports));
+    return new ZAIProvider2(apiKey, defaultModel);
+  }
+  throw new Error(`Unknown provider: ${provider}`);
+}
+var DEFAULT_MODELS;
 var init_config = __esm({
   "src/core/llm/config.ts"() {
     "use strict";
+    DEFAULT_MODELS = {
+      gemini: "gemini-2.0-flash",
+      zai: "glm-4.5-air"
+    };
   }
 });
 
@@ -6839,12 +8204,25 @@ function getEmbeddingRateLimiter() {
   }
   return embeddingLimiter;
 }
-var DEFAULT_EMBEDDING_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter;
+function getLLMRateLimiter() {
+  if (!llmLimiter) {
+    const config2 = loadConfig();
+    const ratelimitConfig = config2?.ratelimit?.llm;
+    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_LLM_RPS;
+    llmLimiter = new RateLimiter({
+      requestsPerSecond: rps,
+      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
+    });
+  }
+  return llmLimiter;
+}
+var DEFAULT_EMBEDDING_RPS, DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter, llmLimiter;
 var init_ratelimiter = __esm({
   "src/core/ratelimiter.ts"() {
     "use strict";
     init_config();
     DEFAULT_EMBEDDING_RPS = 5;
+    DEFAULT_LLM_RPS = 2;
     DEFAULT_BURST_MULTIPLIER = 2;
     RateLimiter = class {
       tokens;
@@ -6944,45 +8322,7 @@ var init_ratelimiter = __esm({
       }
     };
     embeddingLimiter = null;
-  }
-});
-
-// src/core/paths.ts
-import os from "os";
-import path from "path";
-import fs from "fs";
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function getSuperpowersDir() {
-  let dir;
-  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
-    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
-  } else if (process.env.MEMMEM_CONFIG_DIR) {
-    dir = process.env.MEMMEM_CONFIG_DIR;
-  } else {
-    dir = path.join(os.homedir(), ".config", "memmem");
-  }
-  return ensureDir(dir);
-}
-function getIndexDir() {
-  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
-}
-function getDbPath() {
-  if (process.env.CONVERSATION_MEMORY_DB_PATH) {
-    return process.env.CONVERSATION_MEMORY_DB_PATH;
-  }
-  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
-    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
-  }
-  return path.join(getIndexDir(), "conversations.db");
-}
-var init_paths = __esm({
-  "src/core/paths.ts"() {
-    "use strict";
+    llmLimiter = null;
   }
 });
 
@@ -17974,24 +19314,47 @@ async function generateEmbedding(text) {
 }
 
 // src/core/search.ts
+function isValidCalendarDate(dateStr) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date3 = new Date(Date.UTC(year, month - 1, day));
+  return date3.getUTCFullYear() === year && date3.getUTCMonth() === month - 1 && date3.getUTCDate() === day;
+}
+async function normalizeQueryToEnglish(query, queryNormalizerProvider) {
+  if (!queryNormalizerProvider) {
+    return query;
+  }
+  const normalizePrompt = [
+    "Normalize the following search query into concise English for memory retrieval.",
+    "Preserve technical terms, file paths, and identifiers exactly.",
+    "Return only the normalized English query text with no explanation.",
+    "",
+    query
+  ].join("\n");
+  try {
+    const result = await queryNormalizerProvider.complete(normalizePrompt, {
+      maxTokens: 128,
+      systemPrompt: "You normalize search queries to concise English only."
+    });
+    const normalized = result.text.trim();
+    return normalized.length > 0 ? normalized : query;
+  } catch {
+    return query;
+  }
+}
 function validateISODate(dateStr, paramName) {
   const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!isoDateRegex.test(dateStr)) {
     throw new Error(`Invalid ${paramName} date: "${dateStr}". Expected YYYY-MM-DD format (e.g., 2025-10-01)`);
   }
-  const date3 = new Date(dateStr);
-  if (isNaN(date3.getTime())) {
+  if (!isValidCalendarDate(dateStr)) {
     throw new Error(`Invalid ${paramName} date: "${dateStr}". Not a valid calendar date.`);
   }
 }
 function isoToTimestamp(isoDate) {
-  return new Date(isoDate).getTime();
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
 }
-async function search(query, options) {
-  const { db, limit = 10, after, before, projects, files } = options;
-  if (after) validateISODate(after, "--after");
-  if (before) validateISODate(before, "--before");
-  let results = [];
+function buildSharedFilterParts(after, before, projects, files) {
   const timeFilter = [];
   const timeFilterParams = [];
   if (after) {
@@ -17999,8 +19362,10 @@ async function search(query, options) {
     timeFilterParams.push(isoToTimestamp(after));
   }
   if (before) {
-    timeFilter.push("o.timestamp <= ?");
-    timeFilterParams.push(isoToTimestamp(before));
+    const [year, month, day] = before.split("-").map(Number);
+    const nextDayStart = Date.UTC(year, month - 1, day + 1);
+    timeFilter.push("o.timestamp < ?");
+    timeFilterParams.push(nextDayStart);
   }
   const timeClause = timeFilter.length > 0 ? `AND ${timeFilter.join(" AND ")}` : "";
   const projectFilter = [];
@@ -18011,56 +19376,132 @@ async function search(query, options) {
     projectFilterParams.push(...projects);
   }
   const projectClause = projectFilter.length > 0 ? `AND ${projectFilter.join(" AND ")}` : "";
-  function matchesFiles(content) {
-    if (!files || files.length === 0) {
-      return true;
-    }
-    return files.some((filePath) => content.includes(filePath));
+  const fileFilter = [];
+  const fileFilterParams = [];
+  if (files && files.length > 0) {
+    const fileClauses = files.map(() => "instr(o.content, ?) > 0").join(" OR ");
+    fileFilter.push(`(${fileClauses})`);
+    fileFilterParams.push(...files);
   }
+  const fileClause = fileFilter.length > 0 ? `AND ${fileFilter.join(" AND ")}` : "";
+  return {
+    timeClause,
+    timeFilterParams,
+    projectClause,
+    projectFilterParams,
+    fileClause,
+    fileFilterParams
+  };
+}
+async function vector_search(query, options) {
+  const { db, limit = 10, after, before, projects, files } = options;
+  const {
+    timeClause,
+    timeFilterParams,
+    projectClause,
+    projectFilterParams,
+    fileClause,
+    fileFilterParams
+  } = buildSharedFilterParts(after, before, projects, files);
   await initEmbeddings();
   const queryEmbedding = await generateEmbedding(query);
+  const vectorCandidateLimit = files && files.length > 0 ? Math.max(limit * 5, limit) : limit;
   const stmt = db.prepare(`
     SELECT
       o.id,
       o.title,
-      o.content,
       o.project,
-      o.timestamp,
-      vec.distance
+      o.timestamp
     FROM observations o
     INNER JOIN vec_observations vec ON CAST(o.id AS TEXT) = vec.id
     WHERE vec.embedding MATCH ?
       AND vec.k = ?
       ${timeClause}
       ${projectClause}
+      ${fileClause}
     ORDER BY vec.distance ASC
+    LIMIT ?
   `);
   const vectorParams = [
     Buffer.from(new Float32Array(queryEmbedding).buffer),
-    limit,
+    vectorCandidateLimit,
     ...timeFilterParams,
-    ...projectFilterParams
+    ...projectFilterParams,
+    ...fileFilterParams,
+    limit
   ];
-  const vectorResults = stmt.all(...vectorParams);
-  for (const row of vectorResults) {
-    if (!matchesFiles(row.content)) {
+  return stmt.all(...vectorParams);
+}
+function keyword_search(query, options) {
+  const { db, limit = 10, after, before, projects, files } = options;
+  const {
+    timeClause,
+    timeFilterParams,
+    projectClause,
+    projectFilterParams,
+    fileClause,
+    fileFilterParams
+  } = buildSharedFilterParts(after, before, projects, files);
+  const stmt = db.prepare(`
+    SELECT
+      o.id,
+      o.title,
+      o.project,
+      o.timestamp
+    FROM observations o
+    WHERE o.content LIKE ?
+      ${timeClause}
+      ${projectClause}
+      ${fileClause}
+    ORDER BY o.timestamp DESC
+    LIMIT ?
+  `);
+  const keywordParams = [
+    `%${query}%`,
+    ...timeFilterParams,
+    ...projectFilterParams,
+    ...fileFilterParams,
+    limit
+  ];
+  return stmt.all(...keywordParams);
+}
+async function search(query, options) {
+  const { db, limit = 10, after, before, projects, files, queryNormalizerProvider } = options;
+  if (after) validateISODate(after, "--after");
+  if (before) validateISODate(before, "--before");
+  const normalizedQuery = await normalizeQueryToEnglish(query, queryNormalizerProvider);
+  const vectorResults = await vector_search(normalizedQuery, { db, limit, after, before, projects, files });
+  if (vectorResults.length >= limit) {
+    return vectorResults.slice(0, limit);
+  }
+  const keywordResults = keyword_search(normalizedQuery, {
+    db,
+    limit,
+    after,
+    before,
+    projects,
+    files
+  });
+  const combined = [...vectorResults];
+  const seenIds = new Set(vectorResults.map((result) => result.id));
+  for (const result of keywordResults) {
+    if (combined.length >= limit) {
+      break;
+    }
+    if (seenIds.has(result.id)) {
       continue;
     }
-    results.push({
-      id: row.id,
-      title: row.title,
-      project: row.project,
-      timestamp: row.timestamp
-    });
+    combined.push(result);
+    seenIds.add(result.id);
   }
-  return results;
+  return combined;
 }
 
 // src/core/db.ts
 init_paths();
 import Database from "better-sqlite3";
 import path2 from "path";
-import fs2 from "fs";
+import fs3 from "fs";
 import * as sqliteVec from "sqlite-vec";
 function openDatabase() {
   return createDatabase(false);
@@ -18068,12 +19509,12 @@ function openDatabase() {
 function createDatabase(wipe) {
   const dbPath = getDbPath();
   const dbDir = path2.dirname(dbPath);
-  if (!fs2.existsSync(dbDir)) {
-    fs2.mkdirSync(dbDir, { recursive: true });
+  if (!fs3.existsSync(dbDir)) {
+    fs3.mkdirSync(dbDir, { recursive: true });
   }
-  if (wipe && dbPath !== ":memory:" && fs2.existsSync(dbPath)) {
+  if (wipe && dbPath !== ":memory:" && fs3.existsSync(dbPath)) {
     console.log("Deleting old database file for clean slate...");
-    fs2.unlinkSync(dbPath);
+    fs3.unlinkSync(dbPath);
   }
   const db = new Database(dbPath);
   sqliteVec.load(db);
@@ -18102,6 +19543,7 @@ function createDatabase(wipe) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        content_original TEXT,
         project TEXT NOT NULL,
         session_id TEXT,
         timestamp INTEGER NOT NULL,
@@ -18111,6 +19553,15 @@ function createDatabase(wipe) {
     db.exec(`CREATE INDEX idx_observations_project ON observations(project)`);
     db.exec(`CREATE INDEX idx_observations_session ON observations(session_id)`);
     db.exec(`CREATE INDEX idx_observations_timestamp ON observations(timestamp DESC)`);
+  }
+  const observationColumns = db.prepare(`
+    SELECT name FROM pragma_table_info('observations')
+  `).all();
+  const hasContentOriginal = observationColumns.some(
+    (column) => column.name.toLowerCase() === "content_original"
+  );
+  if (!hasContentOriginal) {
+    db.exec(`ALTER TABLE observations ADD COLUMN content_original TEXT`);
   }
   if (!tableNames.has("vec_observations")) {
     db.exec(`
@@ -18130,7 +19581,7 @@ async function findByIds(db, ids) {
   }
   const placeholders = ids.map(() => "?").join(",");
   const stmt = db.prepare(`
-    SELECT id, title, content, project, session_id as sessionId, timestamp
+    SELECT id, title, content, content_original as contentOriginal, project, session_id as sessionId, timestamp
     FROM observations
     WHERE id IN (${placeholders})
     ORDER BY timestamp DESC
@@ -18140,6 +19591,7 @@ async function findByIds(db, ids) {
     id: r.id,
     title: r.title,
     content: r.content,
+    contentOriginal: r.contentOriginal,
     project: r.project,
     sessionId: r.sessionId,
     timestamp: r.timestamp
@@ -18147,7 +19599,7 @@ async function findByIds(db, ids) {
 }
 
 // src/core/read.ts
-import * as fs3 from "fs";
+import * as fs4 from "fs";
 function formatTokenUsage(usage) {
   let output = `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
   if (usage.cache_read_input_tokens) {
@@ -18195,10 +19647,10 @@ function formatMetadata(firstMessage) {
   return output;
 }
 function readConversation(path3, startLine, endLine) {
-  if (!fs3.existsSync(path3)) {
+  if (!fs4.existsSync(path3)) {
     return null;
   }
-  const jsonlContent = fs3.readFileSync(path3, "utf-8");
+  const jsonlContent = fs4.readFileSync(path3, "utf-8");
   return formatConversationAsMarkdown(jsonlContent, startLine, endLine);
 }
 function filterValidMessages(messages) {
@@ -18389,7 +19841,16 @@ function formatAssistantMessage(messages, index, msg) {
   return output;
 }
 
+// src/core/llm/index.ts
+init_gemini_provider();
+init_zai_provider();
+init_config();
+
+// src/core/llm/batch-extract-prompt.ts
+init_logger();
+
 // src/mcp/server.ts
+init_logger();
 var SearchInputSchema = external_exports.object({
   query: external_exports.string().min(2, "Query must be at least 2 characters").describe("Search query string"),
   limit: external_exports.number().int().min(1).max(50).default(10).describe("Maximum number of results to return (default: 10)"),
@@ -18399,7 +19860,8 @@ var SearchInputSchema = external_exports.object({
   files: external_exports.array(external_exports.string().min(1)).optional().describe("Filter results to specific file paths")
 }).strict();
 var GetObservationsInputSchema = external_exports.object({
-  ids: external_exports.array(external_exports.union([external_exports.string(), external_exports.number()])).min(1, "Must provide at least 1 observation ID").max(20, "Cannot get more than 20 observations at once").describe("Array of observation IDs to retrieve")
+  ids: external_exports.array(external_exports.union([external_exports.string(), external_exports.number()])).min(1, "Must provide at least 1 observation ID").max(20, "Cannot get more than 20 observations at once").describe("Array of observation IDs to retrieve"),
+  includeOriginal: external_exports.boolean().default(false).describe("Include original-language/source text (content_original) when available")
 }).strict();
 var ReadInputSchema = external_exports.object({
   path: external_exports.string().min(1, "Path is required").describe("Path to the JSONL conversation file"),
@@ -18412,14 +19874,60 @@ function handleError(error2) {
   }
   return `Error: ${String(error2)}`;
 }
+var cachedQueryNormalizerProvider;
+var cachedQueryNormalizerConfigKey = null;
+var inFlightQueryNormalizerProvider = null;
+var inFlightQueryNormalizerConfigKey = null;
+function __resetQueryNormalizerCacheForTests() {
+  cachedQueryNormalizerProvider = void 0;
+  cachedQueryNormalizerConfigKey = null;
+  inFlightQueryNormalizerProvider = null;
+  inFlightQueryNormalizerConfigKey = null;
+}
+function getConfigCacheKey(config2) {
+  return JSON.stringify([config2.provider, config2.model, config2.apiKey]);
+}
+async function getQueryNormalizerProvider() {
+  const config2 = loadConfig();
+  if (!config2) {
+    return void 0;
+  }
+  const configKey = getConfigCacheKey(config2);
+  if (cachedQueryNormalizerProvider && cachedQueryNormalizerConfigKey === configKey) {
+    return cachedQueryNormalizerProvider;
+  }
+  if (inFlightQueryNormalizerProvider && inFlightQueryNormalizerConfigKey === configKey) {
+    return inFlightQueryNormalizerProvider;
+  }
+  const providerPromise = createProvider(config2).then((provider) => {
+    cachedQueryNormalizerProvider = provider;
+    cachedQueryNormalizerConfigKey = configKey;
+    return provider;
+  }).catch((error2) => {
+    logDebug("handleSearch: query normalizer unavailable, falling back to original query", {
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return void 0;
+  }).finally(() => {
+    if (inFlightQueryNormalizerConfigKey === configKey) {
+      inFlightQueryNormalizerProvider = null;
+      inFlightQueryNormalizerConfigKey = null;
+    }
+  });
+  inFlightQueryNormalizerProvider = providerPromise;
+  inFlightQueryNormalizerConfigKey = configKey;
+  return providerPromise;
+}
 async function handleSearch(params, db) {
+  const queryNormalizerProvider = await getQueryNormalizerProvider();
   const results = await search(params.query, {
     db,
     limit: params.limit,
     after: params.after,
     before: params.before,
     projects: params.projects,
-    files: params.files
+    files: params.files,
+    queryNormalizerProvider
   });
   return results.map((r) => ({
     id: String(r.id),
@@ -18438,7 +19946,8 @@ async function handleGetObservations(params, db) {
     title: obs.title,
     content: obs.content,
     project: obs.project,
-    timestamp: obs.timestamp
+    timestamp: obs.timestamp,
+    ...params.includeOriginal && obs.contentOriginal ? { content_original: obs.contentOriginal } : {}
   }));
 }
 function handleRead(params) {
@@ -18464,7 +19973,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "search",
-        description: `Gives you memory across sessions using observations (structured insights) and conversations. Use BEFORE every task to recover decisions, solutions, and avoid reinventing work. Progressive disclosure: 1) search returns compact observations (~30t), 2) get_observations() for full details (~200-500t), 3) read() for raw conversation (~500-2000t). Supports semantic search, filters by projects/files, and date ranges.`,
+        description: `Gives you memory across sessions using observations (structured insights) and conversations. Use BEFORE every task to recover decisions, solutions, and avoid reinventing work. Progressive disclosure: 1) search returns compact observations (~30t), 2) get_observations() for full details (~200-500t), 3) read() for raw conversation (~500-2000t). Internal search strategies: vector_search first, then keyword_search fallback. Supports filters by projects/files and date ranges.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -18524,6 +20033,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               minItems: 1,
               maxItems: 20,
               description: "Array of observation IDs to retrieve"
+            },
+            includeOriginal: {
+              type: "boolean",
+              default: false,
+              description: "Include original-language/source text (content_original) when available"
             }
           },
           required: ["ids"],
@@ -18624,6 +20138,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           output += `${obs.content}
 
 `;
+          if (params.includeOriginal && obs.content_original) {
+            output += `Original: ${obs.content_original}
+
+`;
+          }
           output += `---
 
 `;
@@ -18656,16 +20175,43 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
-main().catch((error2) => {
-  console.error("Server error:", error2);
-  process.exit(1);
-});
+function shouldRunAsEntrypoint() {
+  return process.env.VITEST !== "true";
+}
+if (shouldRunAsEntrypoint()) {
+  main().catch((error2) => {
+    console.error("Server error:", error2);
+    process.exit(1);
+  });
+}
 export {
   GetObservationsInputSchema,
   ReadInputSchema,
   SearchInputSchema,
+  __resetQueryNormalizerCacheForTests,
   handleError,
   handleGetObservations,
   handleRead,
-  handleSearch
+  handleSearch,
+  shouldRunAsEntrypoint
 };
+/*! Bundled license information:
+
+@google/generative-ai/dist/index.mjs:
+  (**
+   * @license
+   * Copyright 2024 Google LLC
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *)
+*/

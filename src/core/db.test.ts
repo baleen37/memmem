@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
 import { initDatabase, openDatabase, insertPendingEvent, insertObservation, searchObservations, getObservation, getAllPendingEvents } from './db.js';
@@ -74,6 +77,7 @@ describe('Database Schema', () => {
       expect(columnMap.get('content')).toEqual({ type: 'TEXT', notnull: 1 });
       expect(columnMap.get('project')).toEqual({ type: 'TEXT', notnull: 1 });
       expect(columnMap.get('session_id')).toEqual({ type: 'TEXT', notnull: 0 }); // nullable
+      expect(columnMap.get('content_original')).toEqual({ type: 'TEXT', notnull: 0 }); // nullable
       expect(columnMap.get('timestamp')).toEqual({ type: 'INTEGER', notnull: 1 });
       expect(columnMap.get('created_at')).toEqual({ type: 'INTEGER', notnull: 1 });
     });
@@ -203,6 +207,7 @@ describe('Database Schema', () => {
       insertObservation(db, {
         title: 'Test Observation',
         content: 'This is test content for the observation',
+        contentOriginal: 'This is original content for the observation',
         project: 'test-project',
         sessionId: 'test-session',
         timestamp: now,
@@ -218,6 +223,7 @@ describe('Database Schema', () => {
       expect(row.content).toBe('This is test content for the observation');
       expect(row.project).toBe('test-project');
       expect(row.session_id).toBe('test-session');
+      expect(row.content_original).toBe('This is original content for the observation');
       expect(row.timestamp).toBe(now);
       expect(row.created_at).toBe(now);
     });
@@ -365,6 +371,7 @@ describe('Database Schema', () => {
       expect(results[0]).toHaveProperty('id');
       expect(results[0]).toHaveProperty('title');
       expect(results[0]).toHaveProperty('content');
+      expect(results[0].contentOriginal).toBeNull();
       expect(results[0]).toHaveProperty('project');
       expect(results[0]).toHaveProperty('sessionId');
       expect(results[0]).toHaveProperty('timestamp');
@@ -407,6 +414,7 @@ describe('Database Schema', () => {
       insertObservation(db, {
         title: 'Full Test',
         content: 'Full content test',
+        contentOriginal: 'Full original content test',
         project: 'full-project',
         sessionId: 'full-session',
         timestamp: now,
@@ -418,6 +426,7 @@ describe('Database Schema', () => {
       expect(observation).toHaveProperty('id');
       expect(observation).toHaveProperty('title');
       expect(observation).toHaveProperty('content');
+      expect(observation!.contentOriginal).toBe('Full original content test');
       expect(observation).toHaveProperty('project');
       expect(observation).toHaveProperty('sessionId');
       expect(observation).toHaveProperty('timestamp');
@@ -510,6 +519,122 @@ describe('Database Schema', () => {
   });
 
   describe('openDatabase', () => {
+    test('migrates existing observations table by adding content_original', () => {
+      const tempDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-db-test-'));
+      const tempDbPath = path.join(tempDbDir, 'legacy.db');
+      const previousDbPath = process.env.CONVERSATION_MEMORY_DB_PATH;
+
+      let legacyDb: Database.Database | undefined;
+      let migratedDb: Database.Database | undefined;
+      let secondOpenDb: Database.Database | undefined;
+
+      try {
+        process.env.CONVERSATION_MEMORY_DB_PATH = tempDbPath;
+
+        legacyDb = new Database(tempDbPath);
+        sqliteVec.load(legacyDb);
+        legacyDb.exec(`
+          CREATE TABLE observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            project TEXT NOT NULL,
+            session_id TEXT,
+            timestamp INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+          )
+        `);
+
+        legacyDb.prepare(`
+          INSERT INTO observations (title, content, project, session_id, timestamp, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run('Legacy Title', 'Legacy Content', 'legacy-project', 'legacy-session', 1000, 1000);
+        legacyDb.close();
+        legacyDb = undefined;
+
+        migratedDb = openDatabase();
+        const columns = migratedDb.prepare(`
+          SELECT name FROM pragma_table_info('observations')
+        `).all() as Array<{ name: string }>;
+
+        expect(columns.some(column => column.name === 'content_original')).toBe(true);
+
+        const row = migratedDb.prepare(`
+          SELECT title, content, content_original FROM observations WHERE id = 1
+        `).get() as { title: string; content: string; content_original: string | null };
+
+        expect(row.title).toBe('Legacy Title');
+        expect(row.content).toBe('Legacy Content');
+        expect(row.content_original).toBeNull();
+
+        secondOpenDb = openDatabase();
+        secondOpenDb.close();
+        secondOpenDb = undefined;
+      } finally {
+        if (secondOpenDb) secondOpenDb.close();
+        if (migratedDb) migratedDb.close();
+        if (legacyDb) legacyDb.close();
+
+        if (previousDbPath === undefined) {
+          delete process.env.CONVERSATION_MEMORY_DB_PATH;
+        } else {
+          process.env.CONVERSATION_MEMORY_DB_PATH = previousDbPath;
+        }
+
+        fs.rmSync(tempDbDir, { recursive: true, force: true });
+      }
+    });
+
+    test('handles legacy content_original column with different casing', () => {
+      const tempDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-db-test-'));
+      const tempDbPath = path.join(tempDbDir, 'legacy-case.db');
+      const previousDbPath = process.env.CONVERSATION_MEMORY_DB_PATH;
+
+      let legacyDb: Database.Database | undefined;
+      let migratedDb: Database.Database | undefined;
+
+      try {
+        process.env.CONVERSATION_MEMORY_DB_PATH = tempDbPath;
+
+        legacyDb = new Database(tempDbPath);
+        sqliteVec.load(legacyDb);
+        legacyDb.exec(`
+          CREATE TABLE observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            CONTENT_ORIGINAL TEXT,
+            project TEXT NOT NULL,
+            session_id TEXT,
+            timestamp INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+          )
+        `);
+        legacyDb.close();
+        legacyDb = undefined;
+
+        migratedDb = openDatabase();
+
+        const columns = migratedDb.prepare(`
+          SELECT name FROM pragma_table_info('observations')
+        `).all() as Array<{ name: string }>;
+
+        const contentOriginalColumns = columns.filter(column => column.name.toLowerCase() === 'content_original');
+        expect(contentOriginalColumns).toHaveLength(1);
+      } finally {
+        if (migratedDb) migratedDb.close();
+        if (legacyDb) legacyDb.close();
+
+        if (previousDbPath === undefined) {
+          delete process.env.CONVERSATION_MEMORY_DB_PATH;
+        } else {
+          process.env.CONVERSATION_MEMORY_DB_PATH = previousDbPath;
+        }
+
+        fs.rmSync(tempDbDir, { recursive: true, force: true });
+      }
+    });
+
     test('creates new database if not exists', () => {
       // initDatabase already created the tables in beforeEach
       // openDatabase should just open without wiping

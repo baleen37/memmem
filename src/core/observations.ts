@@ -22,6 +22,7 @@ export interface ObservationData {
   id: number;
   title: string;
   content: string;
+  contentOriginal: string | null;
   project: string;
   sessionId: string | null;
   timestamp: number;
@@ -36,6 +37,7 @@ export interface ObservationData {
  * @param project - Project name
  * @param sessionId - Optional session ID
  * @param timestamp - Optional timestamp (defaults to now)
+ * @param contentOriginal - Optional original-language/source text
  * @returns The ID of the created observation
  */
 export async function create(
@@ -44,7 +46,8 @@ export async function create(
   content: string,
   project: string,
   sessionId?: string,
-  timestamp?: number
+  timestamp?: number,
+  contentOriginal?: string
 ): Promise<number> {
   const now = Date.now();
   const obsTimestamp = timestamp ?? now;
@@ -52,6 +55,7 @@ export async function create(
   const observation: Observation = {
     title,
     content,
+    contentOriginal,
     project,
     sessionId,
     timestamp: obsTimestamp,
@@ -90,6 +94,7 @@ export async function findById(
     id: result.id,
     title: result.title,
     content: result.content,
+    contentOriginal: result.contentOriginal,
     project: result.project,
     sessionId: result.sessionId,
     timestamp: result.timestamp
@@ -113,7 +118,7 @@ export async function findByIds(
 
   const placeholders = ids.map(() => '?').join(',');
   const stmt = db.prepare(`
-    SELECT id, title, content, project, session_id as sessionId, timestamp
+    SELECT id, title, content, content_original as contentOriginal, project, session_id as sessionId, timestamp
     FROM observations
     WHERE id IN (${placeholders})
     ORDER BY timestamp DESC
@@ -125,6 +130,7 @@ export async function findByIds(
     id: r.id,
     title: r.title,
     content: r.content,
+    contentOriginal: r.contentOriginal,
     project: r.project,
     sessionId: r.sessionId,
     timestamp: r.timestamp

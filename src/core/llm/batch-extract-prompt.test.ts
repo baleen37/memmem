@@ -37,7 +37,8 @@ describe('batch-extract-prompt', () => {
       expect(prompt).toContain('<previous_observations>');
       expect(prompt).toContain('Fixed authentication bug');
       expect(prompt).toContain('title (under 50 characters)');
-      expect(prompt).toContain('content (under 200 characters)');
+      expect(prompt).toContain('content (English canonical summary under 200 characters)');
+      expect(prompt).toContain('content_original (optional original-language/source text when available)');
     });
 
     it('should build prompt without previous observations when none provided', () => {
@@ -100,6 +101,26 @@ describe('batch-extract-prompt', () => {
       ]);
     });
 
+    it('should parse optional content_original field when present', () => {
+      const json = JSON.stringify([
+        {
+          title: 'Clarified billing rule',
+          content: 'Documented billing validation behavior',
+          content_original: '청구 검증 동작을 문서화함',
+        },
+      ]);
+
+      const result = parseBatchExtractResponse(json);
+
+      expect(result).toEqual([
+        {
+          title: 'Clarified billing rule',
+          content: 'Documented billing validation behavior',
+          contentOriginal: '청구 검증 동작을 문서화함',
+        },
+      ]);
+    });
+
     it('should parse empty array response', () => {
       const json = JSON.stringify([]);
 
@@ -140,6 +161,20 @@ describe('batch-extract-prompt', () => {
 
       expect(result).toEqual([
         { title: 'Valid obs', content: 'Valid content' },
+      ]);
+    });
+
+    it('should ignore non-string content_original and keep valid observation', () => {
+      const json = JSON.stringify([
+        { title: 'Valid obs', content: 'Valid content', content_original: '원문 텍스트' },
+        { title: 'Invalid original', content: 'Content', content_original: 123 },
+      ]);
+
+      const result = parseBatchExtractResponse(json);
+
+      expect(result).toEqual([
+        { title: 'Valid obs', content: 'Valid content', contentOriginal: '원문 텍스트' },
+        { title: 'Invalid original', content: 'Content' },
       ]);
     });
   });
@@ -223,7 +258,7 @@ describe('batch-extract-prompt', () => {
       expect(result).toEqual([]);
     });
 
-    it('should include system prompt for structured JSON output', async () => {
+    it('should include system prompt guidance for canonical and original content', async () => {
       const mockComplete = vi.fn().mockResolvedValue({
         text: JSON.stringify([{ title: 'Test', content: 'Content' }]),
         usage: { input_tokens: 100, output_tokens: 20 },
@@ -238,7 +273,13 @@ describe('batch-extract-prompt', () => {
       expect(mockComplete).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          systemPrompt: expect.stringContaining('JSON array'),
+          systemPrompt: expect.stringContaining('content: English canonical summary'),
+        })
+      );
+      expect(mockComplete).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          systemPrompt: expect.stringContaining('content_original: Optional original-language/source text when available'),
         })
       );
     });

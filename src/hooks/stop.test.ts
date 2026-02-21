@@ -70,7 +70,11 @@ describe('Stop Hook', () => {
       // Mock LLM response
       const mockComplete = vi.fn().mockResolvedValue({
         text: JSON.stringify([
-          { title: 'Fixed auth bug', content: 'Resolved JWT validation issue' },
+          {
+            title: 'Fixed auth bug',
+            content: 'Resolved JWT validation issue',
+            content_original: 'JWT 검증 문제를 해결함',
+          },
         ]),
         usage: { input_tokens: 100, output_tokens: 20 },
       });
@@ -97,6 +101,7 @@ describe('Stop Hook', () => {
       expect(obs).not.toBeNull();
       expect(obs?.title).toBe('Fixed auth bug');
       expect(obs?.content).toBe('Resolved JWT validation issue');
+      expect(obs?.contentOriginal).toBe('JWT 검증 문제를 해결함');
       expect(obs?.sessionId).toBe('test-session-123');
       expect(obs?.project).toBe('test-project');
     });

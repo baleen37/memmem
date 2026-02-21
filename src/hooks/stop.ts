@@ -105,7 +105,8 @@ export async function handleStop(
             obs.content,
             project,
             sessionId,
-            Date.now()
+            Date.now(),
+            obs.contentOriginal
           );
         } catch (error) {
           // Log but continue with other observations

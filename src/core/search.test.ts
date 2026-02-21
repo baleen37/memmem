@@ -105,6 +105,14 @@ describe('search - observation search', () => {
       ).rejects.toThrow('Not a valid calendar date');
     });
 
+    test('should reject invalid day for month', async () => {
+      mockGenerateEmbedding = async () => createTestEmbedding();
+
+      await expect(
+        search('test query', { db, after: '2025-02-30' })
+      ).rejects.toThrow('Not a valid calendar date');
+    });
+
     test('should accept leap year date', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding();
 
@@ -211,6 +219,230 @@ describe('search - observation search', () => {
     });
   });
 
+  describe('search - hybrid mode', () => {
+    test('should fill remaining slots with keyword search when vector results are insufficient', async () => {
+      const now = Date.now();
+
+      insertTestObservation(db, {
+        title: 'Vector-backed observation',
+        content: 'hybrid token from vector and keyword',
+        project: 'test-project',
+        timestamp: now - 2000
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Keyword-only observation 1',
+        content: 'hybrid token in content only',
+        project: 'test-project',
+        timestamp: now - 1000
+      });
+
+      insertTestObservation(db, {
+        title: 'Keyword-only observation 2',
+        content: 'another hybrid token entry',
+        project: 'test-project',
+        timestamp: now
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('hybrid token', { db, limit: 3 });
+
+      expect(results).toHaveLength(3);
+      expect(results[0].title).toBe('Vector-backed observation');
+      expect(results.slice(1).map(r => r.title)).toEqual([
+        'Keyword-only observation 2',
+        'Keyword-only observation 1'
+      ]);
+    });
+
+    test('should dedupe duplicate ids across vector and keyword strategies', async () => {
+      const now = Date.now();
+
+      insertTestObservation(db, {
+        title: 'Vector and keyword match',
+        content: 'dedupe token appears here',
+        project: 'test-project',
+        timestamp: now - 1000
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Keyword only unique',
+        content: 'dedupe token appears only in keyword strategy',
+        project: 'test-project',
+        timestamp: now
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('dedupe token', { db, limit: 2 });
+
+      expect(results).toHaveLength(2);
+      expect(results[0].title).toBe('Vector and keyword match');
+      expect(results[1].title).toBe('Keyword only unique');
+      expect(new Set(results.map(r => r.id)).size).toBe(2);
+    });
+
+    test('should fill remaining slots when top keyword hits overlap vector results', async () => {
+      const now = Date.now();
+
+      insertTestObservation(db, {
+        title: 'Vector and keyword top hit',
+        content: 'overlap token in vector and keyword',
+        project: 'test-project',
+        timestamp: now
+      }, createTestEmbedding(1));
+
+      insertTestObservation(db, {
+        title: 'Keyword unique recent',
+        content: 'overlap token unique content 1',
+        project: 'test-project',
+        timestamp: now - 1000
+      });
+
+      insertTestObservation(db, {
+        title: 'Keyword unique older',
+        content: 'overlap token unique content 2',
+        project: 'test-project',
+        timestamp: now - 2000
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('overlap token', { db, limit: 3 });
+
+      expect(results).toHaveLength(3);
+      expect(results.map(r => r.title)).toEqual([
+        'Vector and keyword top hit',
+        'Keyword unique recent',
+        'Keyword unique older'
+      ]);
+    });
+
+    test('should search keywords in observations.content only', async () => {
+      const now = Date.now();
+
+      insertTestObservation(db, {
+        title: 'keyword-only-title-hit',
+        content: 'content without query term',
+        project: 'test-project',
+        timestamp: now - 1000
+      });
+
+      insertTestObservation(db, {
+        title: 'non-matching title',
+        content: 'content includes keyword-only-title-hit token',
+        project: 'test-project',
+        timestamp: now
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(999);
+
+      const results = await search('keyword-only-title-hit', { db, limit: 5 });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('non-matching title');
+    });
+
+    test('should apply filters to keyword fallback results', async () => {
+      insertTestObservation(db, {
+        title: 'Keyword filtered in',
+        content: 'fallback filter token in src/target.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-20').getTime()
+      });
+
+      insertTestObservation(db, {
+        title: 'Keyword wrong project',
+        content: 'fallback filter token in src/target.ts',
+        project: 'project-b',
+        timestamp: new Date('2025-01-20').getTime()
+      });
+
+      insertTestObservation(db, {
+        title: 'Keyword wrong file',
+        content: 'fallback filter token in src/other.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-20').getTime()
+      });
+
+      insertTestObservation(db, {
+        title: 'Keyword wrong date',
+        content: 'fallback filter token in src/target.ts',
+        project: 'project-a',
+        timestamp: new Date('2025-01-10').getTime()
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(999);
+
+      const results = await search('fallback filter token', {
+        db,
+        limit: 5,
+        projects: ['project-a'],
+        files: ['src/target.ts'],
+        after: '2025-01-15'
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Keyword filtered in');
+    });
+  });
+
+  describe('search - query normalization', () => {
+    test('should use normalized English query when queryNormalizerProvider is provided', async () => {
+      insertTestObservation(db, {
+        title: 'Auth fix',
+        content: 'fixed authentication issue in login flow',
+        project: 'test-project',
+        timestamp: Date.now()
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(999);
+
+      const queryNormalizerProvider = {
+        complete: vi.fn().mockResolvedValue({
+          text: 'authentication issue',
+          usage: { input_tokens: 10, output_tokens: 3 }
+        })
+      };
+
+      const results = await search('인증 이슈', {
+        db,
+        limit: 5,
+        queryNormalizerProvider: queryNormalizerProvider as any
+      } as any);
+
+      expect(queryNormalizerProvider.complete).toHaveBeenCalledTimes(1);
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Auth fix');
+    });
+
+    test('should fallback to original query when normalization fails', async () => {
+      insertTestObservation(db, {
+        title: 'Korean observation',
+        content: '인증 이슈 해결 완료',
+        project: 'test-project',
+        timestamp: Date.now()
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(999);
+
+      const queryNormalizerProvider = {
+        complete: vi.fn().mockRejectedValue(new Error('normalization failed'))
+      };
+
+      const results = await search('인증 이슈', {
+        db,
+        limit: 5,
+        queryNormalizerProvider: queryNormalizerProvider as any
+      } as any);
+
+      expect(queryNormalizerProvider.complete).toHaveBeenCalledTimes(1);
+      expect(results).toHaveLength(1);
+      expect(results[0].title).toBe('Korean observation');
+    });
+  });
+
   describe('search - result structure', () => {
     beforeEach(() => {
       insertTestObservation(db, {
@@ -232,8 +464,9 @@ describe('search - observation search', () => {
       expect(results[0]).toHaveProperty('title');
       expect(results[0]).toHaveProperty('project');
       expect(results[0]).toHaveProperty('timestamp');
-      // Should NOT have similarity field
+      // Should NOT have vector internals
       expect(results[0]).not.toHaveProperty('similarity');
+      expect(results[0]).not.toHaveProperty('distance');
     });
 
     test('should not include content in compact results', async () => {
@@ -449,6 +682,27 @@ describe('search - observation search', () => {
 
       expect(results.length).toBe(1);
       expect(results[0].title).toBe('Boundary observation');
+    });
+
+    test('should include observations later on the before date', async () => {
+      const sameDayNoon = Date.UTC(2025, 0, 15, 12, 34, 56);
+
+      insertTestObservation(db, {
+        title: 'Noon observation',
+        content: 'Noon marker content',
+        project: 'test-project',
+        timestamp: sameDayNoon
+      });
+
+      mockGenerateEmbedding = async () => createTestEmbedding(1);
+
+      const results = await search('Noon marker', {
+        db,
+        before: '2025-01-15'
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].title).toBe('Noon observation');
     });
   });
 

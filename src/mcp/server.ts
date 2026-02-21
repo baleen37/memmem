@@ -24,6 +24,9 @@ import { search } from '../core/search.js';
 import { findByIds as getObservationsByIds } from '../core/observations.js';
 import { readConversation } from '../core/read.js';
 import { openDatabase } from '../core/db.js';
+import { loadConfig, createProvider } from '../core/llm/index.js';
+import type { LLMConfig, LLMProvider } from '../core/llm/index.js';
+import { logDebug } from '../core/logger.js';
 
 // Zod Schemas for Input Validation
 
@@ -70,6 +73,10 @@ const GetObservationsInputSchema = z
       .min(1, 'Must provide at least 1 observation ID')
       .max(20, 'Cannot get more than 20 observations at once')
       .describe('Array of observation IDs to retrieve'),
+    includeOriginal: z
+      .boolean()
+      .default(false)
+      .describe('Include original-language/source text (content_original) when available'),
   })
   .strict();
 
@@ -119,10 +126,68 @@ export interface SearchResult {
   timestamp: number;
 }
 
+let cachedQueryNormalizerProvider: LLMProvider | undefined;
+let cachedQueryNormalizerConfigKey: string | null = null;
+let inFlightQueryNormalizerProvider: Promise<LLMProvider | undefined> | null = null;
+let inFlightQueryNormalizerConfigKey: string | null = null;
+
+export function __resetQueryNormalizerCacheForTests(): void {
+  cachedQueryNormalizerProvider = undefined;
+  cachedQueryNormalizerConfigKey = null;
+  inFlightQueryNormalizerProvider = null;
+  inFlightQueryNormalizerConfigKey = null;
+}
+
+function getConfigCacheKey(config: LLMConfig): string {
+  return JSON.stringify([config.provider, config.model, config.apiKey]);
+}
+
+async function getQueryNormalizerProvider(): Promise<LLMProvider | undefined> {
+  const config = loadConfig();
+  if (!config) {
+    return undefined;
+  }
+
+  const configKey = getConfigCacheKey(config);
+  if (cachedQueryNormalizerProvider && cachedQueryNormalizerConfigKey === configKey) {
+    return cachedQueryNormalizerProvider;
+  }
+
+  if (inFlightQueryNormalizerProvider && inFlightQueryNormalizerConfigKey === configKey) {
+    return inFlightQueryNormalizerProvider;
+  }
+
+  const providerPromise = createProvider(config)
+    .then(provider => {
+      cachedQueryNormalizerProvider = provider;
+      cachedQueryNormalizerConfigKey = configKey;
+      return provider;
+    })
+    .catch(error => {
+      logDebug('handleSearch: query normalizer unavailable, falling back to original query', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return undefined;
+    })
+    .finally(() => {
+      if (inFlightQueryNormalizerConfigKey === configKey) {
+        inFlightQueryNormalizerProvider = null;
+        inFlightQueryNormalizerConfigKey = null;
+      }
+    });
+
+  inFlightQueryNormalizerProvider = providerPromise;
+  inFlightQueryNormalizerConfigKey = configKey;
+
+  return providerPromise;
+}
+
 export async function handleSearch(
   params: SearchInput,
   db: Database.Database
 ): Promise<SearchResult[]> {
+  const queryNormalizerProvider = await getQueryNormalizerProvider();
+
   const results = await search(params.query, {
     db,
     limit: params.limit,
@@ -130,6 +195,7 @@ export async function handleSearch(
     before: params.before,
     projects: params.projects,
     files: params.files,
+    queryNormalizerProvider,
   });
 
   return results.map(r => ({
@@ -146,6 +212,7 @@ export interface ObservationOutput {
   content: string;
   project: string;
   timestamp: number;
+  content_original?: string;
 }
 
 export async function handleGetObservations(
@@ -165,6 +232,7 @@ export async function handleGetObservations(
     content: obs.content,
     project: obs.project,
     timestamp: obs.timestamp,
+    ...(params.includeOriginal && obs.contentOriginal ? { content_original: obs.contentOriginal } : {}),
   }));
 }
 
@@ -197,7 +265,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'search',
-        description: `Gives you memory across sessions using observations (structured insights) and conversations. Use BEFORE every task to recover decisions, solutions, and avoid reinventing work. Progressive disclosure: 1) search returns compact observations (~30t), 2) get_observations() for full details (~200-500t), 3) read() for raw conversation (~500-2000t). Supports semantic search, filters by projects/files, and date ranges.`,
+        description: `Gives you memory across sessions using observations (structured insights) and conversations. Use BEFORE every task to recover decisions, solutions, and avoid reinventing work. Progressive disclosure: 1) search returns compact observations (~30t), 2) get_observations() for full details (~200-500t), 3) read() for raw conversation (~500-2000t). Internal search strategies: vector_search first, then keyword_search fallback. Supports filters by projects/files and date ranges.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -257,6 +325,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               minItems: 1,
               maxItems: 20,
               description: 'Array of observation IDs to retrieve'
+            },
+            includeOriginal: {
+              type: 'boolean',
+              default: false,
+              description: 'Include original-language/source text (content_original) when available'
             }
           },
           required: ['ids'],
@@ -366,6 +439,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           output += `## [${obs.project}, ${date} ${time}] - ${obs.title}\n\n`;
           output += `${obs.content}\n\n`;
+          if (params.includeOriginal && obs.content_original) {
+            output += `Original: ${obs.content_original}\n\n`;
+          }
           output += `---\n\n`;
         }
 
@@ -407,7 +483,13 @@ async function main() {
 
 // Run the Server
 
-main().catch((error) => {
-  console.error('Server error:', error);
-  process.exit(1);
-});
+export function shouldRunAsEntrypoint(): boolean {
+  return process.env.VITEST !== 'true';
+}
+
+if (shouldRunAsEntrypoint()) {
+  main().catch((error) => {
+    console.error('Server error:', error);
+    process.exit(1);
+  });
+}

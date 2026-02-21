@@ -8,13 +8,15 @@ import {
   type ObservationData
 } from './observations.js';
 
-// Mock embedding generation - create a valid 768-dimensional vector
-const createMockEmbedding = (): number[] => Array.from({ length: 768 }, () => Math.random() * 2 - 1);
+const { mockGenerateEmbedding, mockInitEmbeddings } = vi.hoisted(() => ({
+  mockGenerateEmbedding: vi.fn(async () => Array.from({ length: 768 }, () => Math.random() * 2 - 1)),
+  mockInitEmbeddings: vi.fn(async () => {}),
+}));
 
 // Mock generateEmbedding to avoid loading the model in tests
 vi.mock('./embeddings.js', () => ({
-  generateEmbedding: async () => createMockEmbedding(),
-  initEmbeddings: async () => {}
+  generateEmbedding: mockGenerateEmbedding,
+  initEmbeddings: mockInitEmbeddings,
 }));
 
 describe('observations', () => {
@@ -26,6 +28,7 @@ describe('observations', () => {
     testDbPath = ':memory:';
     process.env.CONVERSATION_MEMORY_DB_PATH = testDbPath;
     db = initDatabase();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -210,6 +213,35 @@ describe('observations', () => {
       expect(id2).toBeGreaterThan(id1);
       expect(id3).toBeGreaterThan(id2);
     });
+
+    it('should persist optional contentOriginal', async () => {
+      const id = await create(
+        db,
+        'Bilingual observation',
+        'English canonical summary',
+        'test-project',
+        'session-123',
+        Date.now(),
+        '원문 요약 텍스트'
+      );
+
+      const obs = db.prepare('SELECT content_original FROM observations WHERE id = ?').get(id) as { content_original: string | null };
+      expect(obs.content_original).toBe('원문 요약 텍스트');
+    });
+
+    it('should keep embedding source as title + content only', async () => {
+      await create(
+        db,
+        'Embedding title',
+        'English canonical summary',
+        'test-project',
+        'session-123',
+        Date.now(),
+        '원문 텍스트'
+      );
+
+      expect(mockGenerateEmbedding).toHaveBeenCalledWith('Embedding title\nEnglish canonical summary');
+    });
   });
 
   describe('findById', () => {
@@ -227,6 +259,7 @@ describe('observations', () => {
       expect(observation!.id).toBe(id);
       expect(observation!.title).toBe('Find Me');
       expect(observation!.content).toBe('Find my content');
+      expect(observation!.contentOriginal).toBeNull();
       expect(observation!.project).toBe('test-project');
     });
 
@@ -269,6 +302,23 @@ describe('observations', () => {
 
       expect(observation).not.toBeNull();
       expect(observation!.sessionId).toBeNull();
+    });
+
+    it('should return contentOriginal when provided', async () => {
+      const id = await create(
+        db,
+        'Has original text',
+        'English canonical summary',
+        'test-project',
+        'session-123',
+        Date.now(),
+        '원문 텍스트'
+      );
+
+      const observation = await findById(db, id);
+
+      expect(observation).not.toBeNull();
+      expect(observation!.contentOriginal).toBe('원문 텍스트');
     });
 
     it('should return observation for id 1', async () => {
@@ -337,6 +387,7 @@ describe('observations', () => {
       expect(obs.id).toBe(id);
       expect(obs.title).toBe('Full Test');
       expect(obs.content).toBe('Content');
+      expect(obs.contentOriginal).toBeNull();
       expect(obs.project).toBe('project');
       expect(obs.sessionId).toBe('session-1');
       expect(typeof obs.timestamp).toBe('number');
@@ -400,6 +451,7 @@ describe('observations', () => {
       expect(typeof obs.id).toBe('number');
       expect(typeof obs.title).toBe('string');
       expect(typeof obs.content).toBe('string');
+      expect(obs.contentOriginal === null || typeof obs.contentOriginal === 'string').toBe(true);
       expect(typeof obs.project).toBe('string');
       // sessionId can be string or null
       expect(obs.sessionId === null || typeof obs.sessionId === 'string').toBe(true);

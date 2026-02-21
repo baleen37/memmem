@@ -81,7 +81,11 @@ describe('Integration Tests', () => {
       // Step 3: Trigger Stop hook to extract observations
       const mockProvider = createMockLLMProvider([{
         text: JSON.stringify([
-          { title: 'Fixed async auth bug', content: 'Changed login function to async in auth.ts to properly handle JWT promises' },
+          {
+            title: 'Fixed async auth bug',
+            content: 'Changed login function to async in auth.ts to properly handle JWT promises',
+            content_original: 'auth.ts 로그인 함수를 async로 변경해 JWT 프로미스 처리를 수정함',
+          },
           { title: 'Added login route', content: 'Implemented new login route with JWT authentication' },
         ]),
         usage: { input_tokens: 150, output_tokens: 30 },
@@ -101,6 +105,7 @@ describe('Integration Tests', () => {
 
       expect(obs1).not.toBeNull();
       expect(obs1?.title).toBe('Fixed async auth bug');
+      expect(obs1?.contentOriginal).toBe('auth.ts 로그인 함수를 async로 변경해 JWT 프로미스 처리를 수정함');
       expect(obs1?.project).toBe(project);
       expect(obs1?.sessionId).toBe(sessionId);
 
