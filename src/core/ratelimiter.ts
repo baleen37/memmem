@@ -14,7 +14,7 @@
 
 import { loadConfig } from './llm/config.js';
 
-export interface RateLimiterConfig {
+interface RateLimiterConfig {
   /** Maximum requests per second (token refill rate) */
   requestsPerSecond?: number;
   /** Maximum tokens in bucket (burst capacity) */

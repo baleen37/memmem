@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import { generateEmbedding, initEmbeddings } from './embeddings.js';
 import type { LLMProvider } from './llm/types.js';
 
-export interface SearchOptions {
+interface SearchOptions {
   limit?: number;
   after?: string;  // ISO date string
   before?: string; // ISO date string
@@ -20,7 +20,7 @@ export interface SearchOptions {
 /**
  * Compact observation result (Layer 1 of progressive disclosure)
  */
-export interface CompactObservationResult {
+interface CompactObservationResult {
   id: number;
   title: string;
   project: string;
