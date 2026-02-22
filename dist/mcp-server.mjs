@@ -19287,7 +19287,16 @@ var StdioServerTransport = class {
 init_ratelimiter();
 import { pipeline, env } from "@huggingface/transformers";
 var embeddingPipeline = null;
+var isDisabled = false;
+function isEmbeddingsDisabled() {
+  return process.env.MEMMEM_DISABLE_EMBEDDINGS === "true";
+}
 async function initEmbeddings() {
+  if (isEmbeddingsDisabled()) {
+    isDisabled = true;
+    console.log("Embeddings disabled via MEMMEM_DISABLE_EMBEDDINGS=true");
+    return;
+  }
   if (!embeddingPipeline) {
     console.log("Loading embedding model (first run may take time)...");
     env.cacheDir = "./.cache";
@@ -19300,9 +19309,15 @@ async function initEmbeddings() {
   }
 }
 async function generateEmbedding(text) {
+  if (isDisabled || isEmbeddingsDisabled()) {
+    return null;
+  }
   await getEmbeddingRateLimiter().acquire();
   if (!embeddingPipeline) {
     await initEmbeddings();
+  }
+  if (isDisabled || !embeddingPipeline) {
+    return null;
   }
   const prefixedText = `title: none | text: ${text}`;
   const truncated = prefixedText.substring(0, 8e3);
@@ -19405,6 +19420,9 @@ async function vector_search(query, options) {
   } = buildSharedFilterParts(after, before, projects, files);
   await initEmbeddings();
   const queryEmbedding = await generateEmbedding(query);
+  if (!queryEmbedding) {
+    return [];
+  }
   const vectorCandidateLimit = files && files.length > 0 ? Math.max(limit * 5, limit) : limit;
   const stmt = db.prepare(`
     SELECT

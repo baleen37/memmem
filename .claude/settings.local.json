@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "memmem"
+  ],
+  "enableAllProjectMcpServers": true
+}

@@ -2169,7 +2169,15 @@ var init_llm = __esm({
 
 // src/core/embeddings.ts
 import { pipeline, env } from "@huggingface/transformers";
+function isEmbeddingsDisabled() {
+  return process.env.MEMMEM_DISABLE_EMBEDDINGS === "true";
+}
 async function initEmbeddings() {
+  if (isEmbeddingsDisabled()) {
+    isDisabled = true;
+    console.log("Embeddings disabled via MEMMEM_DISABLE_EMBEDDINGS=true");
+    return;
+  }
   if (!embeddingPipeline) {
     console.log("Loading embedding model (first run may take time)...");
     env.cacheDir = "./.cache";
@@ -2182,9 +2190,15 @@ async function initEmbeddings() {
   }
 }
 async function generateEmbedding(text) {
+  if (isDisabled || isEmbeddingsDisabled()) {
+    return null;
+  }
   await getEmbeddingRateLimiter().acquire();
   if (!embeddingPipeline) {
     await initEmbeddings();
+  }
+  if (isDisabled || !embeddingPipeline) {
+    return null;
   }
   const prefixedText = `title: none | text: ${text}`;
   const truncated = prefixedText.substring(0, 8e3);
@@ -2194,12 +2208,13 @@ async function generateEmbedding(text) {
   });
   return Array.from(output.data);
 }
-var embeddingPipeline;
+var embeddingPipeline, isDisabled;
 var init_embeddings = __esm({
   "src/core/embeddings.ts"() {
     "use strict";
     init_ratelimiter();
     embeddingPipeline = null;
+    isDisabled = false;
   }
 });
 
@@ -2220,7 +2235,7 @@ async function create(db, title, content, project, sessionId, timestamp, content
   const embeddingText = `${title}
 ${content}`;
   const embedding = await generateEmbedding(embeddingText);
-  return insertObservation(db, observation, embedding);
+  return insertObservation(db, observation, embedding ?? void 0);
 }
 var init_observations = __esm({
   "src/core/observations.ts"() {

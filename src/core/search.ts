@@ -157,6 +157,11 @@ async function vector_search(
   await initEmbeddings();
   const queryEmbedding = await generateEmbedding(query);
 
+  // If embeddings are disabled, return empty array (fallback to keyword search)
+  if (!queryEmbedding) {
+    return [];
+  }
+
   // Request more vector candidates when file filters are present to avoid early cutoff.
   const vectorCandidateLimit = files && files.length > 0 ? Math.max(limit * 5, limit) : limit;
 

@@ -65,12 +65,12 @@ export async function create(
   // Initialize embeddings if not already done
   await initEmbeddings();
 
-  // Generate embedding for the observation content
+  // Generate embedding for the observation content (may be null if disabled)
   // Use title and content for better searchability
   const embeddingText = `${title}\n${content}`;
   const embedding = await generateEmbedding(embeddingText);
 
-  return insertObservation(db, observation, embedding);
+  return insertObservation(db, observation, embedding ?? undefined);
 }
 
 /**

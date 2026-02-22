@@ -8,6 +8,9 @@
  * block uses vi.resetModules() to ensure fresh module imports.
  */
 
+// Ensure embeddings are enabled for tests (override env var if set)
+delete process.env.MEMMEM_DISABLE_EMBEDDINGS;
+
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 // Track calls to verify mock behavior
@@ -182,9 +185,10 @@ describe('embeddings', () => {
 
       const result = await generateEmbedding('test');
 
+      expect(result).not.toBeNull();
       expect(Array.isArray(result)).toBe(true);
-      expect(result).toHaveLength(768);
-      result.forEach((val) => {
+      expect(result!).toHaveLength(768);
+      result!.forEach((val) => {
         expect(typeof val).toBe('number');
       });
     });
@@ -194,9 +198,10 @@ describe('embeddings', () => {
 
       const result = await generateEmbedding('test');
 
+      expect(result).not.toBeNull();
       // Check first and last values match our mock pattern
-      expect(result[0]).toBeCloseTo(0.001, 4);
-      expect(result[767]).toBeCloseTo(0.768, 3);
+      expect(result![0]).toBeCloseTo(0.001, 4);
+      expect(result![767]).toBeCloseTo(0.768, 3);
     });
 
     test('calls initEmbeddings if pipeline not initialized', async () => {
