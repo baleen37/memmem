@@ -4,11 +4,10 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
-// Mock embeddings (no real model loading)
-vi.mock('../core/embeddings.js', () => ({
-  initEmbeddings: vi.fn().mockResolvedValue(undefined),
-  generateEmbedding: vi.fn().mockResolvedValue(Array.from({ length: 768 }, (_, i) => i * 0.001)),
-  isEmbeddingsDisabled: vi.fn().mockReturnValue(false),
+// Mock embeddings-model (no real model loading)
+vi.mock('../core/embeddings-model.js', () => ({
+  initModel: vi.fn().mockResolvedValue(undefined),
+  generateEmbeddingFromModel: vi.fn().mockResolvedValue(Array.from({ length: 768 }, (_, i) => i * 0.001)),
 }));
 
 // Mock ratelimiter
@@ -71,9 +70,9 @@ describe('startWorker()', () => {
     responses.forEach(r => expect(r.embedding).toHaveLength(768));
   });
 
-  test('returns error when generateEmbedding returns null', async () => {
-    const { generateEmbedding } = await import('../core/embeddings.js');
-    vi.mocked(generateEmbedding).mockResolvedValueOnce(null);
+  test('returns error when generateEmbeddingFromModel returns null', async () => {
+    const { generateEmbeddingFromModel } = await import('../core/embeddings-model.js');
+    vi.mocked(generateEmbeddingFromModel).mockResolvedValueOnce(null);
     const resp = await sendRequest(sockPath, { id: 'null-test', text: 'fail' });
     expect(resp.error).toBe('embedding returned null');
     expect(resp.embedding).toBeUndefined();

@@ -1,7 +1,7 @@
 import net from 'net';
 import path from 'path';
 import fs from 'fs';
-import { generateEmbedding, initEmbeddings } from '../core/embeddings.js';
+import { initModel, generateEmbeddingFromModel } from '../core/embeddings-model.js';
 import { getEmbeddingRateLimiter } from '../core/ratelimiter.js';
 import { getSuperpowersDir } from '../core/paths.js';
 
@@ -26,7 +26,7 @@ export async function startWorker(sockPath: string): Promise<net.Server | null> 
   if (fs.existsSync(sockPath)) fs.unlinkSync(sockPath);
   fs.mkdirSync(path.dirname(sockPath), { recursive: true });
 
-  await initEmbeddings();
+  await initModel();
 
   let activeConnections = 0;
   let idleTimer: NodeJS.Timeout | null = null;
@@ -63,7 +63,7 @@ export async function startWorker(sockPath: string): Promise<net.Server | null> 
           if (!req.id || typeof req.text !== 'string') throw new Error('invalid request');
 
           await getEmbeddingRateLimiter().acquire();
-          const embedding = await generateEmbedding(req.text);
+          const embedding = await generateEmbeddingFromModel(req.text);
           const resp = embedding
             ? { id: req.id, embedding }
             : { id: req.id, error: 'embedding returned null' };
