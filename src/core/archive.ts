@@ -9,7 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export interface ArchiveOptions {
+interface ArchiveOptions {
   sessionId: string;
   projectSlug: string;
   claudeProjectsDir: string;
@@ -20,7 +20,7 @@ export interface ArchiveOptions {
  * Find session JSONL file in Claude projects directory.
  * Returns the full path, or null if not found.
  */
-export function findSessionJsonl(projectsDir: string, sessionId: string): string | null {
+function findSessionJsonl(projectsDir: string, sessionId: string): string | null {
   const jsonlPath = path.join(projectsDir, `${sessionId}.jsonl`);
   if (fs.existsSync(jsonlPath)) {
     return jsonlPath;

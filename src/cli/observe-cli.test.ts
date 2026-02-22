@@ -1,24 +1,7 @@
-/**
- * Tests for Observe CLI - Handle PostToolUse and Stop hooks for memmem.
- *
- * This CLI is responsible for:
- * - PostToolUse: Compresses and stores tool events in pending_events
- * - Stop: Batch extracts observations from pending_events using LLM
- * - Reading JSON input from stdin for PostToolUse
- * - Handling --summarize flag for Stop hook
- * - Getting session ID and project from environment variables
- * - Graceful error handling with exit code 0
- */
-
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import Database from 'better-sqlite3';
-import type { LLMProvider } from '../core/llm/index.js';
 
-// Mock the modules
 vi.mock('../core/db.js', () => ({
-  initDatabase: vi.fn(),
-  getAllPendingEvents: vi.fn(),
-  getObservation: vi.fn(),
+  openDatabase: vi.fn(),
 }));
 
 vi.mock('../hooks/post-tool-use.js', () => ({
@@ -29,502 +12,218 @@ vi.mock('../hooks/stop.js', () => ({
   handleStop: vi.fn(),
 }));
 
-vi.mock('../core/llm/config.js', () => ({
+vi.mock('../core/llm/index.js', () => ({
   loadConfig: vi.fn(),
   createProvider: vi.fn(),
 }));
 
-// Import mocked modules
-import { initDatabase } from '../core/db.js';
-import { handlePostToolUse } from '../hooks/post-tool-use.js';
-import { handleStop } from '../hooks/stop.js';
-import { loadConfig, createProvider } from '../core/llm/index.js';
+type MockDb = {
+  close: ReturnType<typeof vi.fn>;
+};
 
-describe('Observe CLI', () => {
-  let mockDb: Database.Database;
-  let originalArgv: string[];
-  let originalEnv: NodeJS.ProcessEnv;
+type ObserveCliMocks = {
+  openDatabase: ReturnType<typeof vi.fn>;
+  handlePostToolUse: ReturnType<typeof vi.fn>;
+  handleStop: ReturnType<typeof vi.fn>;
+  loadConfig: ReturnType<typeof vi.fn>;
+  createProvider: ReturnType<typeof vi.fn>;
+};
 
+async function getMocks(): Promise<ObserveCliMocks> {
+  const db = await import('../core/db.js');
+  const postToolUse = await import('../hooks/post-tool-use.js');
+  const stop = await import('../hooks/stop.js');
+  const llm = await import('../core/llm/index.js');
+
+  return {
+    openDatabase: db.openDatabase as ReturnType<typeof vi.fn>,
+    handlePostToolUse: postToolUse.handlePostToolUse as ReturnType<typeof vi.fn>,
+    handleStop: stop.handleStop as ReturnType<typeof vi.fn>,
+    loadConfig: llm.loadConfig as ReturnType<typeof vi.fn>,
+    createProvider: llm.createProvider as ReturnType<typeof vi.fn>,
+  };
+}
+
+async function flushMain(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+async function runObserveCli(options: {
+  argv?: string[];
+  env?: Record<string, string | undefined>;
+  stdin?: string;
+}): Promise<void> {
+  const originalArgv = process.argv;
+  const originalEnv = process.env;
+
+  process.argv = options.argv ?? ['node', 'observe-cli.js'];
+  process.env = { ...originalEnv, ...(options.env ?? {}) };
+
+  const stdinOnSpy = vi.spyOn(process.stdin, 'on').mockImplementation(((event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'data' && typeof options.stdin === 'string') {
+      handler(options.stdin);
+    }
+    if (event === 'end') {
+      handler();
+    }
+    return process.stdin;
+  }) as typeof process.stdin.on);
+
+  try {
+    await import('./observe-cli.js');
+    await flushMain();
+  } finally {
+    stdinOnSpy.mockRestore();
+    process.argv = originalArgv;
+    process.env = originalEnv;
+  }
+}
+
+describe('observe-cli behavior', () => {
   beforeEach(() => {
-    // Create mock database
-    mockDb = {
-      close: vi.fn(),
-      prepare: vi.fn().mockReturnThis(),
-      run: vi.fn(),
-      get: vi.fn(),
-      all: vi.fn(),
-    } as unknown as Database.Database;
-
-    (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
-
-    // Store original argv and env
-    originalArgv = process.argv;
-    originalEnv = { ...process.env };
-
-    // Clear all mocks
+    vi.resetModules();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    // Restore original argv and env
-    process.argv = originalArgv;
-    process.env = originalEnv;
+    vi.restoreAllMocks();
   });
 
-  describe('getSessionId', () => {
-    test('should get session ID from CLAUDE_SESSION_ID env var', () => {
-      process.env.CLAUDE_SESSION_ID = 'session-from-session-id';
-      process.env.CLAUDE_SESSION = 'should-be-ignored';
+  test('routes summarize flow and calls handleStop with derived values', async () => {
+    const mocks = await getMocks();
+    const mockDb: MockDb = { close: vi.fn() };
+    const mockConfig = { provider: 'gemini', apiKey: 'test-key', model: 'gemini-2.0-flash' };
+    const mockProvider = { complete: vi.fn() };
 
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('session-from-session-id');
+    mocks.openDatabase.mockReturnValue(mockDb);
+    mocks.loadConfig.mockReturnValue(mockConfig);
+    mocks.createProvider.mockResolvedValue(mockProvider);
+    mocks.handleStop.mockResolvedValue(undefined);
+
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js', '--summarize'],
+      env: {
+        CLAUDE_SESSION_ID: 'env-session',
+        CLAUDE_PROJECT: 'env-project',
+        CLAUDE_PROJECT_DIR: '/Users/jito.hello/dev/wooto/memmem',
+      },
+      stdin: JSON.stringify({ session_id: 'stdin-session' }),
     });
 
-    test('should fall back to CLAUDE_SESSION env var', () => {
-      delete process.env.CLAUDE_SESSION_ID;
-      process.env.CLAUDE_SESSION = 'session-from-session';
-
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('session-from-session');
+    expect(mocks.loadConfig).toHaveBeenCalled();
+    expect(mocks.createProvider).toHaveBeenCalledWith(mockConfig);
+    expect(mocks.handleStop).toHaveBeenCalledWith(mockDb, {
+      provider: mockProvider,
+      sessionId: 'stdin-session',
+      project: 'env-project',
+      projectSlug: '-Users-jito-hello-dev-wooto-memmem',
     });
-
-    test('should fall back to unknown when no env var is set', () => {
-      delete process.env.CLAUDE_SESSION_ID;
-      delete process.env.CLAUDE_SESSION;
-
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('unknown');
-    });
+    expect(mocks.handlePostToolUse).not.toHaveBeenCalled();
+    expect(mockDb.close).toHaveBeenCalled();
   });
 
-  describe('getProject', () => {
-    test('should get project from CLAUDE_PROJECT env var', () => {
-      process.env.CLAUDE_PROJECT = 'my-project';
-      process.env.CLAUDE_PROJECT_NAME = 'should-be-ignored';
+  test('calls handlePostToolUse with merged payload and env fallback values', async () => {
+    const mocks = await getMocks();
+    const mockDb: MockDb = { close: vi.fn() };
+    mocks.openDatabase.mockReturnValue(mockDb);
 
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-      expect(project).toBe('my-project');
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js'],
+      env: {
+        CLAUDE_SESSION_ID: undefined,
+        CLAUDE_SESSION: 'fallback-session',
+        CLAUDE_PROJECT: undefined,
+        CLAUDE_PROJECT_NAME: 'fallback-project',
+      },
+      stdin: JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'npm test' },
+        tool_response: { exitCode: 0 },
+      }),
     });
 
-    test('should fall back to CLAUDE_PROJECT_NAME env var', () => {
-      delete process.env.CLAUDE_PROJECT;
-      process.env.CLAUDE_PROJECT_NAME = 'project-from-name';
-
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-      expect(project).toBe('project-from-name');
-    });
-
-    test('should fall back to default when no env var is set', () => {
-      delete process.env.CLAUDE_PROJECT;
-      delete process.env.CLAUDE_PROJECT_NAME;
-
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-      expect(project).toBe('default');
-    });
+    expect(mocks.handlePostToolUse).toHaveBeenCalledWith(
+      mockDb,
+      'fallback-session',
+      'fallback-project',
+      'Bash',
+      { command: 'npm test', exitCode: 0 }
+    );
+    expect(mocks.handleStop).not.toHaveBeenCalled();
+    expect(mockDb.close).toHaveBeenCalled();
   });
 
-  describe('handleObserve', () => {
-    test('should call handlePostToolUse with correct parameters', () => {
-      process.env.CLAUDE_SESSION_ID = 'test-session-123';
-      process.env.CLAUDE_PROJECT = 'test-project';
+  test('prefers stdin session_id over env session for PostToolUse', async () => {
+    const mocks = await getMocks();
+    const mockDb: MockDb = { close: vi.fn() };
+    mocks.openDatabase.mockReturnValue(mockDb);
 
-      (handlePostToolUse as ReturnType<typeof vi.fn>).mockImplementation(() => {});
-
-      const db = mockDb;
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-
-      handlePostToolUse(db, sessionId, project, 'Read', { file_path: '/test.ts', lines: 100 });
-
-      expect(handlePostToolUse).toHaveBeenCalledWith(
-        mockDb,
-        'test-session-123',
-        'test-project',
-        'Read',
-        { file_path: '/test.ts', lines: 100 }
-      );
-    });
-
-    test('should close database after handling tool use', () => {
-      (handlePostToolUse as ReturnType<typeof vi.fn>).mockImplementation(() => {});
-
-      const db = mockDb;
-      try {
-        handlePostToolUse(db, 'session-1', 'project-1', 'Bash', { command: 'ls', exitCode: 0 });
-      } finally {
-        db.close();
-      }
-
-      expect(db.close).toHaveBeenCalled();
-    });
-  });
-
-  describe('handleSummarize', () => {
-    test('should call loadConfig and createProvider', async () => {
-      process.env.CLAUDE_SESSION_ID = 'test-session-123';
-      process.env.CLAUDE_PROJECT = 'test-project';
-
-      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
-      const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
-
-      (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
-      (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(mockProvider);
-      (handleStop as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-
-      const db = mockDb;
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-
-      const config = loadConfig();
-      if (!config) {
-        throw new Error('No config');
-      }
-
-      const provider = await createProvider(config);
-      await handleStop(db, { provider, sessionId, project });
-
-      try {
-        db.close();
-      } finally {
-        // noop
-      }
-
-      expect(loadConfig).toHaveBeenCalled();
-      expect(createProvider).toHaveBeenCalledWith(mockConfig);
-      expect(handleStop).toHaveBeenCalledWith(db, {
-        provider: mockProvider,
-        sessionId: 'test-session-123',
-        project: 'test-project',
-      });
-    });
-
-    test('should skip when LLM config is missing', () => {
-      process.env.CLAUDE_SESSION_ID = 'test-session-123';
-      process.env.CLAUDE_PROJECT = 'test-project';
-
-      (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(null);
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const config = loadConfig();
-      if (!config) {
-        console.error('[memmem] No LLM config found, skipping observation extraction');
-        expect(handleStop).not.toHaveBeenCalled();
-      }
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('should close database after summarization', async () => {
-      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
-      const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
-
-      (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
-      (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(mockProvider);
-      (handleStop as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-
-      const db = mockDb;
-      try {
-        await handleStop(db, {
-          provider: mockProvider,
-          sessionId: 'test-session',
-          project: 'test-project',
-        });
-      } finally {
-        db.close();
-      }
-
-      expect(db.close).toHaveBeenCalled();
-    });
-  });
-
-  describe('readStdin', () => {
-    test('should parse JSON input correctly', () => {
-      const stdinData = JSON.stringify({
-        tool_name: 'Read',
-        tool_input: { file_path: '/test.ts' },
-        tool_response: { lines: 100 },
-      });
-
-      const parsed = JSON.parse(stdinData);
-      expect(parsed.tool_name).toBe('Read');
-      expect(parsed.tool_input).toEqual({ file_path: '/test.ts' });
-      expect(parsed.tool_response).toEqual({ lines: 100 });
-    });
-
-    test('should handle empty stdin gracefully', () => {
-      const emptyData = '';
-
-      if (!emptyData.trim()) {
-        // Should return early without processing
-        expect(true).toBe(true);
-      }
-    });
-  });
-
-  describe('main function', () => {
-    test('should detect --summarize flag', () => {
-      process.argv = ['node', 'observe-cli.js', '--summarize'];
-
-      const command = process.argv[2];
-      const shouldSummarize = command === '--summarize' || process.argv.includes('--summarize');
-
-      expect(shouldSummarize).toBe(true);
-    });
-
-    test('should handle PostToolUse hook without --summarize', () => {
-      process.argv = ['node', 'observe-cli.js'];
-
-      const command = process.argv[2];
-      const shouldSummarize = command === '--summarize' || process.argv.includes('--summarize');
-
-      expect(shouldSummarize).toBe(false);
-    });
-
-    test('should detect --summarize anywhere in argv', () => {
-      process.argv = ['node', 'observe-cli.js', 'some-arg', '--summarize', 'other-arg'];
-
-      const shouldSummarize = process.argv.includes('--summarize');
-
-      expect(shouldSummarize).toBe(true);
-    });
-
-    test('should handle errors gracefully', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const error = new Error('Test error');
-      console.error(`[memmem] Error in observe: ${error.message}`);
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[memmem] Error in observe: Test error');
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('should handle invalid JSON in stdin', () => {
-      const invalidJson = '{ invalid json }';
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      try {
-        JSON.parse(invalidJson);
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error(`[memmem] Error in observe: ${error.message}`);
-          expect(error instanceof Error).toBe(true);
-        }
-      }
-
-      consoleErrorSpy.mockRestore();
-    });
-  });
-
-  describe('PostToolUse hook integration', () => {
-    test('should parse valid PostToolUse input', () => {
-      const stdinData = JSON.stringify({
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js'],
+      env: {
+        CLAUDE_SESSION_ID: 'env-session-id',
+        CLAUDE_PROJECT: 'test-project',
+      },
+      stdin: JSON.stringify({
         tool_name: 'Read',
         tool_input: { file_path: '/src/test.ts' },
-        tool_response: { lines: 100 },
-      });
-
-      const input = JSON.parse(stdinData);
-
-      expect(input.tool_name).toBe('Read');
-      expect(input.tool_input).toEqual({ file_path: '/src/test.ts' });
-      expect(input.tool_response).toEqual({ lines: 100 });
-    });
-
-    test('should use session_id from stdin JSON when env var is absent', () => {
-      delete process.env.CLAUDE_SESSION_ID;
-      delete process.env.CLAUDE_SESSION;
-
-      const stdinInput = {
-        tool_name: 'Read',
-        tool_input: { file_path: '/src/test.ts' },
-        tool_response: { lines: 100 },
-        session_id: 'session-from-stdin-12345',
-      };
-
-      // The session ID should come from stdin when env vars are absent
-      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('session-from-stdin-12345');
-    });
-
-    test('should prefer stdin session_id over env var', () => {
-      process.env.CLAUDE_SESSION_ID = 'env-session-id';
-
-      const stdinInput = {
-        tool_name: 'Read',
-        tool_input: { file_path: '/src/test.ts' },
-        tool_response: { lines: 100 },
+        tool_response: { lines: 10 },
         session_id: 'stdin-session-id',
-      };
-
-      // stdin session_id should take priority
-      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('stdin-session-id');
+      }),
     });
 
-    test('should pass stdin session_id to handlePostToolUse', () => {
-      delete process.env.CLAUDE_SESSION_ID;
-      delete process.env.CLAUDE_SESSION;
-
-      (handlePostToolUse as ReturnType<typeof vi.fn>).mockImplementation(() => {});
-
-      const stdinInput = {
-        tool_name: 'Read',
-        tool_input: { file_path: '/src/test.ts' },
-        tool_response: { lines: 100 },
-        session_id: 'real-session-from-claude-code',
-      };
-
-      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || 'unknown';
-      handlePostToolUse(mockDb, sessionId, 'default', stdinInput.tool_name, stdinInput.tool_input);
-
-      expect(handlePostToolUse).toHaveBeenCalledWith(
-        mockDb,
-        'real-session-from-claude-code',
-        'default',
-        'Read',
-        { file_path: '/src/test.ts' },
-      );
-    });
-
-    test('should handle various tool types', () => {
-      const toolInputs = [
-        { tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_response: { exitCode: 0 } },
-        { tool_name: 'Edit', tool_input: { file_path: '/test.ts', old_string: 'old', new_string: 'new' }, tool_response: {} },
-        { tool_name: 'Grep', tool_input: { pattern: 'TODO', path: '/src' }, tool_response: { count: 5 } },
-        { tool_name: 'WebSearch', tool_input: { query: 'test query' }, tool_response: {} },
-      ];
-
-      for (const input of toolInputs) {
-        const parsed = JSON.parse(JSON.stringify(input));
-        expect(parsed.tool_name).toBeDefined();
-        expect(parsed.tool_input).toBeDefined();
-        expect(parsed.tool_response).toBeDefined();
-      }
-    });
+    expect(mocks.handlePostToolUse).toHaveBeenCalledWith(
+      mockDb,
+      'stdin-session-id',
+      'test-project',
+      'Read',
+      { file_path: '/src/test.ts', lines: 10 }
+    );
   });
 
-  describe('Stop hook integration', () => {
-    test('should verify --summarize flag detection', () => {
-      process.argv = ['node', 'observe-cli.js', '--summarize'];
+  test('returns early for empty stdin in non-summarize path', async () => {
+    const mocks = await getMocks();
 
-      const shouldSummarize = process.argv.includes('--summarize');
-      expect(shouldSummarize).toBe(true);
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js'],
+      stdin: '   \n\t  ',
     });
 
-    test('should use session_id from Stop hook stdin', () => {
-      delete process.env.CLAUDE_SESSION_ID;
-      delete process.env.CLAUDE_SESSION;
-
-      // Claude Code Stop hook sends session_id in stdin JSON
-      const stopStdinInput = {
-        session_id: 'stop-hook-session-abc123',
-        transcript_path: '/Users/jito.hello/.claude/projects/proj/stop-hook-session-abc123.jsonl',
-        hook_event_name: 'Stop',
-      };
-
-      const sessionId = stopStdinInput.session_id || process.env.CLAUDE_SESSION_ID || 'unknown';
-      expect(sessionId).toBe('stop-hook-session-abc123');
-    });
-
-    test('should load LLM config when present', () => {
-      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
-      (loadConfig as ReturnType<typeof vi.fn>).mockReturnValue(mockConfig);
-
-      const config = loadConfig();
-      expect(config).toEqual(mockConfig);
-    });
-
-    test('should create provider from config', async () => {
-      const mockConfig = { provider: 'gemini' as const, apiKey: 'test-key', model: 'gemini-2.0-flash' };
-      const mockProvider = { complete: vi.fn() } as unknown as LLMProvider;
-
-      (createProvider as ReturnType<typeof vi.fn>).mockResolvedValue(mockProvider);
-
-      const provider = await createProvider(mockConfig);
-      expect(provider).toBe(mockProvider);
-    });
+    expect(mocks.openDatabase).not.toHaveBeenCalled();
+    expect(mocks.handlePostToolUse).not.toHaveBeenCalled();
+    expect(mocks.handleStop).not.toHaveBeenCalled();
   });
 
-  describe('Edge cases', () => {
-    test('should handle whitespace-only stdin', () => {
-      const whitespaceData = '   \n\t  ';
+  test('logs skip message when summarize config is missing', async () => {
+    const mocks = await getMocks();
+    const mockDb: MockDb = { close: vi.fn() };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      if (!whitespaceData.trim()) {
-        expect(true).toBe(true);
-      }
+    mocks.openDatabase.mockReturnValue(mockDb);
+    mocks.loadConfig.mockReturnValue(null);
+
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js', '--summarize'],
+      stdin: JSON.stringify({ session_id: 's1' }),
     });
 
-    test('should handle missing tool_name in input', () => {
-      const invalidInput = JSON.stringify({ tool_input: { data: 'test' }, tool_response: {} });
-
-      const input = JSON.parse(invalidInput);
-      expect(input.tool_name).toBeUndefined();
-    });
-
-    test('should handle missing tool_input in input', () => {
-      const invalidInput = JSON.stringify({ tool_name: 'Read', tool_response: {} });
-
-      const input = JSON.parse(invalidInput);
-      expect(input.tool_input).toBeUndefined();
-    });
-
-    test('should handle empty tool_name', () => {
-      const input = JSON.stringify({ tool_name: '', tool_input: {}, tool_response: {} });
-
-      const parsed = JSON.parse(input);
-      expect(parsed.tool_name).toBe('');
-    });
-
-    test('should handle null tool_response', () => {
-      const input = JSON.stringify({ tool_name: 'Read', tool_input: {}, tool_response: null });
-
-      const parsed = JSON.parse(input);
-      expect(parsed.tool_response).toBeNull();
-    });
+    expect(errorSpy).toHaveBeenCalledWith('[memmem] No LLM config found, skipping observation extraction');
+    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(mocks.handleStop).not.toHaveBeenCalled();
+    expect(mockDb.close).toHaveBeenCalled();
   });
 
-  describe('Database integration', () => {
-    test('should initialize database using initDatabase', () => {
-      (initDatabase as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+  test('logs error and exits 0 on invalid stdin JSON', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 
-      const db = initDatabase();
-
-      expect(initDatabase).toHaveBeenCalled();
-      expect(db).toBe(mockDb);
+    await runObserveCli({
+      argv: ['node', 'observe-cli.js'],
+      stdin: '{ invalid json }',
     });
 
-    test('should close database in finally block', () => {
-      (handlePostToolUse as ReturnType<typeof vi.fn>).mockImplementation(() => {});
-
-      const db = mockDb;
-      try {
-        handlePostToolUse(db, 'session', 'project', 'Read', {});
-      } finally {
-        db.close();
-      }
-
-      expect(db.close).toHaveBeenCalled();
-    });
-  });
-
-  describe('Environment variable priority', () => {
-    test('should prioritize CLAUDE_SESSION_ID over CLAUDE_SESSION', () => {
-      process.env.CLAUDE_SESSION_ID = 'from-session-id';
-      process.env.CLAUDE_SESSION = 'from-session';
-
-      const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
-      expect(sessionId).toBe('from-session-id');
-    });
-
-    test('should prioritize CLAUDE_PROJECT over CLAUDE_PROJECT_NAME', () => {
-      process.env.CLAUDE_PROJECT = 'from-project';
-      process.env.CLAUDE_PROJECT_NAME = 'from-project-name';
-
-      const project = process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || 'default';
-      expect(project).toBe('from-project');
-    });
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('[memmem] Error in observe:'));
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });

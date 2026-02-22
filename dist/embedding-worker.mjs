@@ -319,6 +319,5 @@ if (shouldRunAsEntrypoint()) {
 }
 export {
   getSocketPath,
-  shouldRunAsEntrypoint,
   startWorker
 };
