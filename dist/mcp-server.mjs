@@ -2872,20 +2872,20 @@ var require_compile = __commonJS({
     var util_1 = require_util();
     var validate_1 = require_validate();
     var SchemaEnv = class {
-      constructor(env2) {
+      constructor(env) {
         var _a;
         this.refs = {};
         this.dynamicAnchors = {};
         let schema;
-        if (typeof env2.schema == "object")
-          schema = env2.schema;
-        this.schema = env2.schema;
-        this.schemaId = env2.schemaId;
-        this.root = env2.root || this;
-        this.baseId = (_a = env2.baseId) !== null && _a !== void 0 ? _a : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env2.schemaId || "$id"]);
-        this.schemaPath = env2.schemaPath;
-        this.localRefs = env2.localRefs;
-        this.meta = env2.meta;
+        if (typeof env.schema == "object")
+          schema = env.schema;
+        this.schema = env.schema;
+        this.schemaId = env.schemaId;
+        this.root = env.root || this;
+        this.baseId = (_a = env.baseId) !== null && _a !== void 0 ? _a : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env.schemaId || "$id"]);
+        this.schemaPath = env.schemaPath;
+        this.localRefs = env.localRefs;
+        this.meta = env.meta;
         this.$async = schema === null || schema === void 0 ? void 0 : schema.$async;
         this.refs = {};
       }
@@ -3069,15 +3069,15 @@ var require_compile = __commonJS({
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
         }
       }
-      let env2;
+      let env;
       if (typeof schema != "boolean" && schema.$ref && !(0, util_1.schemaHasRulesButRef)(schema, this.RULES)) {
         const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema.$ref);
-        env2 = resolveSchema.call(this, root, $ref);
+        env = resolveSchema.call(this, root, $ref);
       }
       const { schemaId } = this.opts;
-      env2 = env2 || new SchemaEnv({ schema, schemaId, root, baseId });
-      if (env2.schema !== env2.root.schema)
-        return env2;
+      env = env || new SchemaEnv({ schema, schemaId, root, baseId });
+      if (env.schema !== env.root.schema)
+        return env;
       return void 0;
     }
   }
@@ -3225,8 +3225,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path3) {
-      let input = path3;
+    function removeDotSegments(path4) {
+      let input = path4;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3425,8 +3425,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path3, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
+        const [path4, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path4 && path4 !== "/" ? path4 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -4478,8 +4478,8 @@ var require_ref = __commonJS({
       schemaType: "string",
       code(cxt) {
         const { gen, schema: $ref, it } = cxt;
-        const { baseId, schemaEnv: env2, validateName, opts, self } = it;
-        const { root } = env2;
+        const { baseId, schemaEnv: env, validateName, opts, self } = it;
+        const { root } = env;
         if (($ref === "#" || $ref === "#/") && baseId === root.baseId)
           return callRootRef();
         const schOrEnv = compile_1.resolveRef.call(self, root, baseId, $ref);
@@ -4489,8 +4489,8 @@ var require_ref = __commonJS({
           return callValidate(schOrEnv);
         return inlineRefSchema(schOrEnv);
         function callRootRef() {
-          if (env2 === root)
-            return callRef(cxt, validateName, env2, env2.$async);
+          if (env === root)
+            return callRef(cxt, validateName, env, env.$async);
           const rootName = gen.scopeValue("root", { ref: root });
           return callRef(cxt, (0, codegen_1._)`${rootName}.validate`, root, root.$async);
         }
@@ -4520,14 +4520,14 @@ var require_ref = __commonJS({
     exports.getValidate = getValidate;
     function callRef(cxt, v, sch, $async) {
       const { gen, it } = cxt;
-      const { allErrors, schemaEnv: env2, opts } = it;
+      const { allErrors, schemaEnv: env, opts } = it;
       const passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
       if ($async)
         callAsyncRef();
       else
         callSyncRef();
       function callAsyncRef() {
-        if (!env2.$async)
+        if (!env.$async)
           throw new Error("async schema referenced by sync schema");
         const valid = gen.let("valid");
         gen.try(() => {
@@ -6792,6 +6792,52 @@ var require_dist = __commonJS({
   }
 });
 
+// src/core/paths.ts
+import os from "os";
+import path from "path";
+import fs from "fs";
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getSuperpowersDir() {
+  let dir;
+  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
+    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
+  } else if (process.env.MEMMEM_CONFIG_DIR) {
+    dir = process.env.MEMMEM_CONFIG_DIR;
+  } else {
+    dir = path.join(os.homedir(), ".config", "memmem");
+  }
+  return ensureDir(dir);
+}
+function getIndexDir() {
+  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
+}
+function getDbPath() {
+  if (process.env.CONVERSATION_MEMORY_DB_PATH) {
+    return process.env.CONVERSATION_MEMORY_DB_PATH;
+  }
+  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
+    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
+  }
+  return path.join(getIndexDir(), "conversations.db");
+}
+function getLogDir() {
+  return ensureDir(path.join(getSuperpowersDir(), "logs"));
+}
+function getLogFilePath() {
+  const date3 = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  return path.join(getLogDir(), `${date3}.log`);
+}
+var init_paths = __esm({
+  "src/core/paths.ts"() {
+    "use strict";
+  }
+});
+
 // node_modules/@google/generative-ai/dist/index.mjs
 function getClientHeaders(requestOptions) {
   const clientHeaders = [];
@@ -7792,54 +7838,8 @@ var init_dist = __esm({
   }
 });
 
-// src/core/paths.ts
-import os from "os";
-import path from "path";
-import fs from "fs";
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-function getSuperpowersDir() {
-  let dir;
-  if (process.env.CONVERSATION_MEMORY_CONFIG_DIR) {
-    dir = process.env.CONVERSATION_MEMORY_CONFIG_DIR;
-  } else if (process.env.MEMMEM_CONFIG_DIR) {
-    dir = process.env.MEMMEM_CONFIG_DIR;
-  } else {
-    dir = path.join(os.homedir(), ".config", "memmem");
-  }
-  return ensureDir(dir);
-}
-function getIndexDir() {
-  return ensureDir(path.join(getSuperpowersDir(), "conversation-index"));
-}
-function getDbPath() {
-  if (process.env.CONVERSATION_MEMORY_DB_PATH) {
-    return process.env.CONVERSATION_MEMORY_DB_PATH;
-  }
-  if (process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH) {
-    return process.env.MEMMEM_DB_PATH || process.env.TEST_DB_PATH;
-  }
-  return path.join(getIndexDir(), "conversations.db");
-}
-function getLogDir() {
-  return ensureDir(path.join(getSuperpowersDir(), "logs"));
-}
-function getLogFilePath() {
-  const date3 = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  return path.join(getLogDir(), `${date3}.log`);
-}
-var init_paths = __esm({
-  "src/core/paths.ts"() {
-    "use strict";
-  }
-});
-
 // src/core/logger.ts
-import fs2 from "fs";
+import fs4 from "fs";
 function formatLogEntry(entry) {
   const dataStr = entry.data ? ` ${JSON.stringify(entry.data)}` : "";
   return `[${entry.timestamp}] [${entry.level}] ${entry.message}${dataStr}`;
@@ -7847,7 +7847,7 @@ function formatLogEntry(entry) {
 function writeLog(entry) {
   const logPath = getLogFilePath();
   const line = formatLogEntry(entry) + "\n";
-  fs2.appendFileSync(logPath, line, "utf-8");
+  fs4.appendFileSync(logPath, line, "utf-8");
 }
 function logInfo(message, data) {
   const entry = {
@@ -7893,137 +7893,18 @@ var init_logger = __esm({
   }
 });
 
-// src/core/llm/gemini-provider.ts
-var gemini_provider_exports = {};
-__export(gemini_provider_exports, {
-  GeminiProvider: () => GeminiProvider
-});
-var DEFAULT_MODEL, GeminiProvider;
-var init_gemini_provider = __esm({
-  "src/core/llm/gemini-provider.ts"() {
-    "use strict";
-    init_dist();
-    init_logger();
-    init_ratelimiter();
-    DEFAULT_MODEL = "gemini-2.0-flash";
-    GeminiProvider = class {
-      client;
-      model;
-      /**
-       * Creates a new GeminiProvider instance.
-       *
-       * @param apiKey - Google API key for authentication
-       * @param model - Model name to use (default: gemini-2.0-flash)
-       * @throws {Error} If API key is not provided
-       */
-      constructor(apiKey, model = DEFAULT_MODEL) {
-        if (!apiKey) {
-          throw new Error("GeminiProvider requires an API key");
-        }
-        this.client = new GoogleGenerativeAI(apiKey);
-        this.model = model;
-      }
-      /**
-       * Completes a prompt using the Gemini API.
-       *
-       * @param prompt - The user prompt to complete
-       * @param options - Optional configuration for the completion
-       * @returns Promise resolving to the completion result with token usage
-       * @throws {Error} If the API call fails
-       */
-      async complete(prompt, options) {
-        await getLLMRateLimiter().acquire();
-        const startTime = Date.now();
-        logInfo("[GeminiProvider] Starting completion", {
-          model: this.model,
-          promptLength: prompt.length,
-          maxTokens: options?.maxTokens
-        });
-        try {
-          const generationConfig = {};
-          if (options?.maxTokens) {
-            generationConfig.maxOutputTokens = options.maxTokens;
-          }
-          const modelParams = { model: this.model };
-          if (options?.systemPrompt) {
-            modelParams.systemInstruction = options.systemPrompt;
-          }
-          if (Object.keys(generationConfig).length > 0) {
-            modelParams.generationConfig = generationConfig;
-          }
-          logDebug("[GeminiProvider] Sending request", {
-            model: this.model,
-            hasSystemPrompt: !!options?.systemPrompt
-          });
-          const generativeModel = this.client.getGenerativeModel(modelParams);
-          const result = await generativeModel.generateContent(prompt);
-          const duration3 = Date.now() - startTime;
-          const parsed = this.parseResult(result);
-          logInfo("[GeminiProvider] Completion successful", {
-            duration: duration3,
-            inputTokens: parsed.usage.input_tokens,
-            outputTokens: parsed.usage.output_tokens,
-            responseLength: parsed.text.length
-          });
-          return parsed;
-        } catch (error2) {
-          const duration3 = Date.now() - startTime;
-          logError("[GeminiProvider] Completion failed", error2, {
-            model: this.model,
-            duration: duration3
-          });
-          throw new Error(
-            `Gemini API call failed: ${error2 instanceof Error ? error2.message : String(error2)}`
-          );
-        }
-      }
-      /**
-       * Parses a Gemini API response into an LLMResult.
-       *
-       * @param result - The raw API response from Gemini
-       * @returns Parsed LLM result with text and token usage
-       */
-      parseResult(result) {
-        const response = result.response;
-        const text = response.text() ?? "";
-        const usage = this.extractUsage(response);
-        return { text, usage };
-      }
-      /**
-       * Extracts token usage information from a Gemini API response.
-       *
-       * Note: Gemini API may not return cache-related token usage fields.
-       * These fields will be undefined in the returned TokenUsage object.
-       *
-       * @param response - The response object from Gemini
-       * @returns Token usage information
-       */
-      extractUsage(response) {
-        const usageMetadata = response.usageMetadata;
-        return {
-          input_tokens: usageMetadata?.promptTokenCount ?? 0,
-          output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
-          // Gemini doesn't provide cache-related token usage
-          cache_read_input_tokens: void 0,
-          cache_creation_input_tokens: void 0
-        };
-      }
-    };
-  }
-});
-
 // src/core/llm/zai-provider.ts
 var zai_provider_exports = {};
 __export(zai_provider_exports, {
   ZAIProvider: () => ZAIProvider
 });
-var DEFAULT_MODEL2, DEFAULT_BASE_URL2, ZAIProvider;
+var DEFAULT_MODEL, DEFAULT_BASE_URL2, ZAIProvider;
 var init_zai_provider = __esm({
   "src/core/llm/zai-provider.ts"() {
     "use strict";
     init_logger();
     init_ratelimiter();
-    DEFAULT_MODEL2 = "glm-4.5-air";
+    DEFAULT_MODEL = "glm-4.5-air";
     DEFAULT_BASE_URL2 = "https://api.z.ai/api/coding/paas/v4";
     ZAIProvider = class {
       apiKey;
@@ -8037,7 +7918,7 @@ var init_zai_provider = __esm({
        * @param baseUrl - Base URL for API (default: https://api.z.ai/api/paas/v4)
        * @throws {Error} If API key is not provided
        */
-      constructor(apiKey, model = DEFAULT_MODEL2, baseUrl = DEFAULT_BASE_URL2) {
+      constructor(apiKey, model = DEFAULT_MODEL, baseUrl = DEFAULT_BASE_URL2) {
         if (!apiKey) {
           throw new Error("ZAIProvider requires an API key");
         }
@@ -8138,16 +8019,16 @@ var init_zai_provider = __esm({
 });
 
 // src/core/llm/config.ts
-import { existsSync, readFileSync } from "fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "fs";
 import { join } from "path";
 function loadConfig() {
   const configDir = join(process.env.HOME ?? "", ".config", "memmem");
   const configPath = join(configDir, "config.json");
-  if (!existsSync(configPath)) {
+  if (!existsSync2(configPath)) {
     return null;
   }
   try {
-    const configContent = readFileSync(configPath, "utf-8");
+    const configContent = readFileSync2(configPath, "utf-8");
     const config2 = JSON.parse(configContent);
     if (!config2.provider || !config2.apiKey) {
       console.warn("Invalid config: missing provider or apiKey field");
@@ -8192,18 +8073,6 @@ var init_config = __esm({
 });
 
 // src/core/ratelimiter.ts
-function getEmbeddingRateLimiter() {
-  if (!embeddingLimiter) {
-    const config2 = loadConfig();
-    const ratelimitConfig = config2?.ratelimit?.embedding;
-    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_EMBEDDING_RPS;
-    embeddingLimiter = new RateLimiter({
-      requestsPerSecond: rps,
-      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
-    });
-  }
-  return embeddingLimiter;
-}
 function getLLMRateLimiter() {
   if (!llmLimiter) {
     const config2 = loadConfig();
@@ -8216,12 +8085,11 @@ function getLLMRateLimiter() {
   }
   return llmLimiter;
 }
-var DEFAULT_EMBEDDING_RPS, DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter, llmLimiter;
+var DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, llmLimiter;
 var init_ratelimiter = __esm({
   "src/core/ratelimiter.ts"() {
     "use strict";
     init_config();
-    DEFAULT_EMBEDDING_RPS = 5;
     DEFAULT_LLM_RPS = 2;
     DEFAULT_BURST_MULTIPLIER = 2;
     RateLimiter = class {
@@ -8321,8 +8189,126 @@ var init_ratelimiter = __esm({
         }
       }
     };
-    embeddingLimiter = null;
     llmLimiter = null;
+  }
+});
+
+// src/core/llm/gemini-provider.ts
+var gemini_provider_exports = {};
+__export(gemini_provider_exports, {
+  GeminiProvider: () => GeminiProvider
+});
+var DEFAULT_MODEL2, GeminiProvider;
+var init_gemini_provider = __esm({
+  "src/core/llm/gemini-provider.ts"() {
+    "use strict";
+    init_dist();
+    init_logger();
+    init_ratelimiter();
+    DEFAULT_MODEL2 = "gemini-2.0-flash";
+    GeminiProvider = class {
+      client;
+      model;
+      /**
+       * Creates a new GeminiProvider instance.
+       *
+       * @param apiKey - Google API key for authentication
+       * @param model - Model name to use (default: gemini-2.0-flash)
+       * @throws {Error} If API key is not provided
+       */
+      constructor(apiKey, model = DEFAULT_MODEL2) {
+        if (!apiKey) {
+          throw new Error("GeminiProvider requires an API key");
+        }
+        this.client = new GoogleGenerativeAI(apiKey);
+        this.model = model;
+      }
+      /**
+       * Completes a prompt using the Gemini API.
+       *
+       * @param prompt - The user prompt to complete
+       * @param options - Optional configuration for the completion
+       * @returns Promise resolving to the completion result with token usage
+       * @throws {Error} If the API call fails
+       */
+      async complete(prompt, options) {
+        await getLLMRateLimiter().acquire();
+        const startTime = Date.now();
+        logInfo("[GeminiProvider] Starting completion", {
+          model: this.model,
+          promptLength: prompt.length,
+          maxTokens: options?.maxTokens
+        });
+        try {
+          const generationConfig = {};
+          if (options?.maxTokens) {
+            generationConfig.maxOutputTokens = options.maxTokens;
+          }
+          const modelParams = { model: this.model };
+          if (options?.systemPrompt) {
+            modelParams.systemInstruction = options.systemPrompt;
+          }
+          if (Object.keys(generationConfig).length > 0) {
+            modelParams.generationConfig = generationConfig;
+          }
+          logDebug("[GeminiProvider] Sending request", {
+            model: this.model,
+            hasSystemPrompt: !!options?.systemPrompt
+          });
+          const generativeModel = this.client.getGenerativeModel(modelParams);
+          const result = await generativeModel.generateContent(prompt);
+          const duration3 = Date.now() - startTime;
+          const parsed = this.parseResult(result);
+          logInfo("[GeminiProvider] Completion successful", {
+            duration: duration3,
+            inputTokens: parsed.usage.input_tokens,
+            outputTokens: parsed.usage.output_tokens,
+            responseLength: parsed.text.length
+          });
+          return parsed;
+        } catch (error2) {
+          const duration3 = Date.now() - startTime;
+          logError("[GeminiProvider] Completion failed", error2, {
+            model: this.model,
+            duration: duration3
+          });
+          throw new Error(
+            `Gemini API call failed: ${error2 instanceof Error ? error2.message : String(error2)}`
+          );
+        }
+      }
+      /**
+       * Parses a Gemini API response into an LLMResult.
+       *
+       * @param result - The raw API response from Gemini
+       * @returns Parsed LLM result with text and token usage
+       */
+      parseResult(result) {
+        const response = result.response;
+        const text = response.text() ?? "";
+        const usage = this.extractUsage(response);
+        return { text, usage };
+      }
+      /**
+       * Extracts token usage information from a Gemini API response.
+       *
+       * Note: Gemini API may not return cache-related token usage fields.
+       * These fields will be undefined in the returned TokenUsage object.
+       *
+       * @param response - The response object from Gemini
+       * @returns Token usage information
+       */
+      extractUsage(response) {
+        const usageMetadata = response.usageMetadata;
+        return {
+          input_tokens: usageMetadata?.promptTokenCount ?? 0,
+          output_tokens: usageMetadata?.candidatesTokenCount ?? 0,
+          // Gemini doesn't provide cache-related token usage
+          cache_read_input_tokens: void 0,
+          cache_creation_input_tokens: void 0
+        };
+      }
+    };
   }
 });
 
@@ -8804,8 +8790,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path3, errorMaps, issueData } = params;
-  const fullPath = [...path3, ...issueData.path || []];
+  const { data, path: path4, errorMaps, issueData } = params;
+  const fullPath = [...path4, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -8921,11 +8907,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path3, key) {
+  constructor(parent, value, path4, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path3;
+    this._path = path4;
     this._key = key;
   }
   get path() {
@@ -12563,10 +12549,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path4) {
+  if (!path4)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path4.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12886,11 +12872,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path4, issues) {
   return issues.map((iss) => {
     var _a;
     (_a = iss).path ?? (_a.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path4);
     return iss;
   });
 }
@@ -19284,48 +19270,123 @@ var StdioServerTransport = class {
 };
 
 // src/core/embeddings.ts
-init_ratelimiter();
-import { pipeline, env } from "@huggingface/transformers";
-var embeddingPipeline = null;
-var isDisabled = false;
+init_paths();
+import net from "net";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+import path2 from "path";
+function getSocketPath() {
+  return path2.join(getSuperpowersDir(), "embedding-worker.sock");
+}
 function isEmbeddingsDisabled() {
   return process.env.MEMMEM_DISABLE_EMBEDDINGS === "true";
 }
 async function initEmbeddings() {
-  if (isEmbeddingsDisabled()) {
-    isDisabled = true;
-    console.log("Embeddings disabled via MEMMEM_DISABLE_EMBEDDINGS=true");
-    return;
+}
+var RETRIES = 5;
+var DELAYS_MS = [50, 100, 200, 400, 800];
+var sharedSocket = null;
+var pending = /* @__PURE__ */ new Map();
+var reqCounter = 0;
+var workerSpawned = false;
+var _workerConnector = null;
+function getWorkerBinaryPath() {
+  if (process.env.MEMMEM_WORKER_BINARY) return process.env.MEMMEM_WORKER_BINARY;
+  const currentFile = fileURLToPath(import.meta.url);
+  return path2.join(path2.dirname(currentFile), "embedding-worker.mjs");
+}
+function spawnWorker() {
+  if (workerSpawned) return;
+  workerSpawned = true;
+  const child = spawn(process.execPath, [getWorkerBinaryPath()], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env }
+  });
+  child.unref();
+}
+function tryConnect(sockPath) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection(sockPath);
+    socket.once("connect", () => resolve(socket));
+    socket.once("error", reject);
+    setTimeout(() => {
+      socket.destroy();
+      reject(new Error("connect timeout"));
+    }, 500);
+  });
+}
+async function connectToWorker() {
+  if (_workerConnector) return _workerConnector();
+  const sockPath = getSocketPath();
+  for (let i = 0; i < RETRIES; i++) {
+    try {
+      return await tryConnect(sockPath);
+    } catch {
+      if (i === 0) spawnWorker();
+      if (i < DELAYS_MS.length) await new Promise((r) => setTimeout(r, DELAYS_MS[i]));
+    }
   }
-  if (!embeddingPipeline) {
-    console.log("Loading embedding model (first run may take time)...");
-    env.cacheDir = "./.cache";
-    embeddingPipeline = await pipeline(
-      "feature-extraction",
-      "onnx-community/embeddinggemma-300m-ONNX",
-      { dtype: "q4" }
-    );
-    console.log("Embedding model loaded");
-  }
+  throw new Error("embedding worker unavailable after retries");
+}
+async function getSocket() {
+  if (sharedSocket && !sharedSocket.destroyed) return sharedSocket;
+  const socket = await connectToWorker();
+  sharedSocket = socket;
+  workerSpawned = false;
+  let recvBuf = "";
+  socket.on("data", (chunk) => {
+    recvBuf += chunk.toString();
+    let nl;
+    while ((nl = recvBuf.indexOf("\n")) !== -1) {
+      const line = recvBuf.slice(0, nl).trim();
+      recvBuf = recvBuf.slice(nl + 1);
+      if (!line) continue;
+      try {
+        const resp = JSON.parse(line);
+        const entry = pending.get(resp.id);
+        if (entry) {
+          pending.delete(resp.id);
+          if (resp.embedding) entry.resolve(resp.embedding);
+          else entry.reject(new Error(resp.error ?? "worker error"));
+        }
+      } catch {
+      }
+    }
+  });
+  socket.on("close", () => {
+    sharedSocket = null;
+    const err = new Error("embedding worker disconnected");
+    for (const [, e] of pending) e.reject(err);
+    pending.clear();
+  });
+  socket.on("error", () => {
+  });
+  return socket;
 }
 async function generateEmbedding(text) {
-  if (isDisabled || isEmbeddingsDisabled()) {
+  if (isEmbeddingsDisabled()) return null;
+  try {
+    const socket = await getSocket();
+    const id = `emb-${++reqCounter}`;
+    return await new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      socket.write(JSON.stringify({ id, text }) + "\n", (err) => {
+        if (err) {
+          pending.delete(id);
+          reject(err);
+        }
+      });
+      setTimeout(() => {
+        if (pending.has(id)) {
+          pending.delete(id);
+          reject(new Error("embedding request timeout"));
+        }
+      }, 3e4);
+    });
+  } catch {
     return null;
   }
-  await getEmbeddingRateLimiter().acquire();
-  if (!embeddingPipeline) {
-    await initEmbeddings();
-  }
-  if (isDisabled || !embeddingPipeline) {
-    return null;
-  }
-  const prefixedText = `title: none | text: ${text}`;
-  const truncated = prefixedText.substring(0, 8e3);
-  const output = await embeddingPipeline(truncated, {
-    pooling: "mean",
-    normalize: true
-  });
-  return Array.from(output.data);
 }
 
 // src/core/search.ts
@@ -19518,21 +19579,21 @@ async function search(query, options) {
 // src/core/db.ts
 init_paths();
 import Database from "better-sqlite3";
-import path2 from "path";
-import fs3 from "fs";
+import path3 from "path";
+import fs2 from "fs";
 import * as sqliteVec from "sqlite-vec";
 function openDatabase() {
   return createDatabase(false);
 }
 function createDatabase(wipe) {
   const dbPath = getDbPath();
-  const dbDir = path2.dirname(dbPath);
-  if (!fs3.existsSync(dbDir)) {
-    fs3.mkdirSync(dbDir, { recursive: true });
+  const dbDir = path3.dirname(dbPath);
+  if (!fs2.existsSync(dbDir)) {
+    fs2.mkdirSync(dbDir, { recursive: true });
   }
-  if (wipe && dbPath !== ":memory:" && fs3.existsSync(dbPath)) {
+  if (wipe && dbPath !== ":memory:" && fs2.existsSync(dbPath)) {
     console.log("Deleting old database file for clean slate...");
-    fs3.unlinkSync(dbPath);
+    fs2.unlinkSync(dbPath);
   }
   const db = new Database(dbPath);
   sqliteVec.load(db);
@@ -19617,7 +19678,7 @@ async function findByIds(db, ids) {
 }
 
 // src/core/read.ts
-import * as fs4 from "fs";
+import * as fs3 from "fs";
 function formatTokenUsage(usage) {
   let output = `_in: ${(usage.input_tokens || 0).toLocaleString()}`;
   if (usage.cache_read_input_tokens) {
@@ -19664,11 +19725,11 @@ function formatMetadata(firstMessage) {
   output += "---\n\n";
   return output;
 }
-function readConversation(path3, startLine, endLine) {
-  if (!fs4.existsSync(path3)) {
+function readConversation(path4, startLine, endLine) {
+  if (!fs3.existsSync(path4)) {
     return null;
   }
-  const jsonlContent = fs4.readFileSync(path3, "utf-8");
+  const jsonlContent = fs3.readFileSync(path4, "utf-8");
   return formatConversationAsMarkdown(jsonlContent, startLine, endLine);
 }
 function filterValidMessages(messages) {

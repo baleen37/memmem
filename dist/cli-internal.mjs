@@ -441,13 +441,13 @@ function compressGrep(data) {
     return "Searched";
   }
   const pattern = data.pattern || "";
-  const path5 = data.path;
+  const path6 = data.path;
   const count = data.count;
   const matches = data.matches;
   const matchCount = count !== void 0 ? count : matches?.length || 0;
   let result = `Searched '${pattern}'`;
-  if (path5) {
-    result += ` in ${path5}`;
+  if (path6) {
+    result += ` in ${path6}`;
   }
   result += ` \u2192 ${matchCount} matches`;
   return result;
@@ -1770,18 +1770,6 @@ var init_config = __esm({
 });
 
 // src/core/ratelimiter.ts
-function getEmbeddingRateLimiter() {
-  if (!embeddingLimiter) {
-    const config = loadConfig();
-    const ratelimitConfig = config?.ratelimit?.embedding;
-    const rps = ratelimitConfig?.requestsPerSecond ?? DEFAULT_EMBEDDING_RPS;
-    embeddingLimiter = new RateLimiter({
-      requestsPerSecond: rps,
-      burstSize: ratelimitConfig?.burstSize ?? rps * DEFAULT_BURST_MULTIPLIER
-    });
-  }
-  return embeddingLimiter;
-}
 function getLLMRateLimiter() {
   if (!llmLimiter) {
     const config = loadConfig();
@@ -1794,12 +1782,11 @@ function getLLMRateLimiter() {
   }
   return llmLimiter;
 }
-var DEFAULT_EMBEDDING_RPS, DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, embeddingLimiter, llmLimiter;
+var DEFAULT_LLM_RPS, DEFAULT_BURST_MULTIPLIER, RateLimiter, llmLimiter;
 var init_ratelimiter = __esm({
   "src/core/ratelimiter.ts"() {
     "use strict";
     init_config();
-    DEFAULT_EMBEDDING_RPS = 5;
     DEFAULT_LLM_RPS = 2;
     DEFAULT_BURST_MULTIPLIER = 2;
     RateLimiter = class {
@@ -1899,7 +1886,6 @@ var init_ratelimiter = __esm({
         }
       }
     };
-    embeddingLimiter = null;
     llmLimiter = null;
   }
 });
@@ -2168,53 +2154,128 @@ var init_llm = __esm({
 });
 
 // src/core/embeddings.ts
-import { pipeline, env } from "@huggingface/transformers";
+import net from "net";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+import path3 from "path";
+function getSocketPath() {
+  return path3.join(getSuperpowersDir(), "embedding-worker.sock");
+}
 function isEmbeddingsDisabled() {
   return process.env.MEMMEM_DISABLE_EMBEDDINGS === "true";
 }
 async function initEmbeddings() {
-  if (isEmbeddingsDisabled()) {
-    isDisabled = true;
-    console.log("Embeddings disabled via MEMMEM_DISABLE_EMBEDDINGS=true");
-    return;
+}
+function getWorkerBinaryPath() {
+  if (process.env.MEMMEM_WORKER_BINARY) return process.env.MEMMEM_WORKER_BINARY;
+  const currentFile = fileURLToPath(import.meta.url);
+  return path3.join(path3.dirname(currentFile), "embedding-worker.mjs");
+}
+function spawnWorker() {
+  if (workerSpawned) return;
+  workerSpawned = true;
+  const child = spawn(process.execPath, [getWorkerBinaryPath()], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env }
+  });
+  child.unref();
+}
+function tryConnect(sockPath) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection(sockPath);
+    socket.once("connect", () => resolve(socket));
+    socket.once("error", reject);
+    setTimeout(() => {
+      socket.destroy();
+      reject(new Error("connect timeout"));
+    }, 500);
+  });
+}
+async function connectToWorker() {
+  if (_workerConnector) return _workerConnector();
+  const sockPath = getSocketPath();
+  for (let i = 0; i < RETRIES; i++) {
+    try {
+      return await tryConnect(sockPath);
+    } catch {
+      if (i === 0) spawnWorker();
+      if (i < DELAYS_MS.length) await new Promise((r) => setTimeout(r, DELAYS_MS[i]));
+    }
   }
-  if (!embeddingPipeline) {
-    console.log("Loading embedding model (first run may take time)...");
-    env.cacheDir = "./.cache";
-    embeddingPipeline = await pipeline(
-      "feature-extraction",
-      "onnx-community/embeddinggemma-300m-ONNX",
-      { dtype: "q4" }
-    );
-    console.log("Embedding model loaded");
-  }
+  throw new Error("embedding worker unavailable after retries");
+}
+async function getSocket() {
+  if (sharedSocket && !sharedSocket.destroyed) return sharedSocket;
+  const socket = await connectToWorker();
+  sharedSocket = socket;
+  workerSpawned = false;
+  let recvBuf = "";
+  socket.on("data", (chunk) => {
+    recvBuf += chunk.toString();
+    let nl;
+    while ((nl = recvBuf.indexOf("\n")) !== -1) {
+      const line = recvBuf.slice(0, nl).trim();
+      recvBuf = recvBuf.slice(nl + 1);
+      if (!line) continue;
+      try {
+        const resp = JSON.parse(line);
+        const entry = pending.get(resp.id);
+        if (entry) {
+          pending.delete(resp.id);
+          if (resp.embedding) entry.resolve(resp.embedding);
+          else entry.reject(new Error(resp.error ?? "worker error"));
+        }
+      } catch {
+      }
+    }
+  });
+  socket.on("close", () => {
+    sharedSocket = null;
+    const err = new Error("embedding worker disconnected");
+    for (const [, e] of pending) e.reject(err);
+    pending.clear();
+  });
+  socket.on("error", () => {
+  });
+  return socket;
 }
 async function generateEmbedding(text) {
-  if (isDisabled || isEmbeddingsDisabled()) {
+  if (isEmbeddingsDisabled()) return null;
+  try {
+    const socket = await getSocket();
+    const id = `emb-${++reqCounter}`;
+    return await new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      socket.write(JSON.stringify({ id, text }) + "\n", (err) => {
+        if (err) {
+          pending.delete(id);
+          reject(err);
+        }
+      });
+      setTimeout(() => {
+        if (pending.has(id)) {
+          pending.delete(id);
+          reject(new Error("embedding request timeout"));
+        }
+      }, 3e4);
+    });
+  } catch {
     return null;
   }
-  await getEmbeddingRateLimiter().acquire();
-  if (!embeddingPipeline) {
-    await initEmbeddings();
-  }
-  if (isDisabled || !embeddingPipeline) {
-    return null;
-  }
-  const prefixedText = `title: none | text: ${text}`;
-  const truncated = prefixedText.substring(0, 8e3);
-  const output = await embeddingPipeline(truncated, {
-    pooling: "mean",
-    normalize: true
-  });
-  return Array.from(output.data);
 }
-var embeddingPipeline, isDisabled;
+var RETRIES, DELAYS_MS, sharedSocket, pending, reqCounter, workerSpawned, _workerConnector;
 var init_embeddings = __esm({
   "src/core/embeddings.ts"() {
     "use strict";
-    init_ratelimiter();
-    embeddingPipeline = null;
-    isDisabled = false;
+    init_paths();
+    RETRIES = 5;
+    DELAYS_MS = [50, 100, 200, 400, 800];
+    sharedSocket = null;
+    pending = /* @__PURE__ */ new Map();
+    reqCounter = 0;
+    workerSpawned = false;
+    _workerConnector = null;
   }
 });
 
@@ -2247,9 +2308,9 @@ var init_observations = __esm({
 
 // src/core/archive.ts
 import fs4 from "fs";
-import path3 from "path";
+import path4 from "path";
 function findSessionJsonl(projectsDir, sessionId) {
-  const jsonlPath = path3.join(projectsDir, `${sessionId}.jsonl`);
+  const jsonlPath = path4.join(projectsDir, `${sessionId}.jsonl`);
   if (fs4.existsSync(jsonlPath)) {
     return jsonlPath;
   }
@@ -2257,13 +2318,13 @@ function findSessionJsonl(projectsDir, sessionId) {
 }
 function archiveSession(options) {
   const { sessionId, projectSlug, claudeProjectsDir, archiveDir } = options;
-  const srcDir = path3.join(claudeProjectsDir, projectSlug);
+  const srcDir = path4.join(claudeProjectsDir, projectSlug);
   const srcPath = findSessionJsonl(srcDir, sessionId);
   if (!srcPath) {
     return;
   }
-  const dstDir = path3.join(archiveDir, projectSlug);
-  const dstPath = path3.join(dstDir, `${sessionId}.jsonl`);
+  const dstDir = path4.join(archiveDir, projectSlug);
+  const dstPath = path4.join(dstDir, `${sessionId}.jsonl`);
   if (fs4.existsSync(dstPath)) {
     return;
   }
@@ -2278,7 +2339,7 @@ var init_archive = __esm({
 
 // src/hooks/stop.ts
 import os2 from "os";
-import path4 from "path";
+import path5 from "path";
 async function handleStop(db, options) {
   const { provider, sessionId, project, batchSize = DEFAULT_BATCH_SIZE, projectSlug, claudeProjectsDir, archiveDir } = options;
   const allEvents = getAllPendingEvents(db, sessionId);
@@ -2325,7 +2386,7 @@ async function handleStop(db, options) {
       archiveSession({
         sessionId,
         projectSlug,
-        claudeProjectsDir: claudeProjectsDir ?? path4.join(os2.homedir(), ".claude", "projects"),
+        claudeProjectsDir: claudeProjectsDir ?? path5.join(os2.homedir(), ".claude", "projects"),
         archiveDir: archiveDir ?? getArchiveDir()
       });
     } catch (error) {
