@@ -54,6 +54,15 @@ async function buildCli() {
     });
     console.log("✓ Built dist/mcp-server.mjs");
 
+    // Build embedding worker (singleton process for all MCP clients)
+    await build({
+      ...commonConfig,
+      entryPoints: ["src/mcp/embedding-worker.ts"],
+      outfile: "dist/embedding-worker.mjs",
+      banner: { js: "#!/usr/bin/env node" },
+    });
+    console.log("✓ Built dist/embedding-worker.mjs");
+
     // Copy wrapper script to dist/ for cached plugins
     await mkdir("dist/lib", { recursive: true });
     await copyFile(

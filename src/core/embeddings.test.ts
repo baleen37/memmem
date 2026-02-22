@@ -84,7 +84,7 @@ describe('generateEmbedding()', () => {
 
 // Mock socket helpers
 function createMockSocket(response: object): net.Socket {
-  const emitter = new EventEmitter() as net.Socket;
+  const emitter = new EventEmitter() as any;
   emitter.write = (data: any) => {
     const req = JSON.parse(data.toString().trim());
     setImmediate(() => emitter.emit('data', JSON.stringify({ id: req.id, ...response }) + '\n'));
@@ -93,11 +93,11 @@ function createMockSocket(response: object): net.Socket {
   emitter.destroyed = false;
   emitter.destroy = () => { emitter.destroyed = true; return emitter; };
   emitter.end = () => emitter;
-  return emitter;
+  return emitter as net.Socket;
 }
 
 function createMockSocketMulti(): net.Socket {
-  const emitter = new EventEmitter() as net.Socket;
+  const emitter = new EventEmitter() as any;
   emitter.write = (data: any) => {
     const req = JSON.parse(data.toString().trim());
     const embedding = Array.from({ length: 768 }, () => Math.random());
@@ -107,5 +107,5 @@ function createMockSocketMulti(): net.Socket {
   emitter.destroyed = false;
   emitter.destroy = () => { emitter.destroyed = true; return emitter; };
   emitter.end = () => emitter;
-  return emitter;
+  return emitter as net.Socket;
 }
