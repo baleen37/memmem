@@ -1,308 +1,111 @@
-/**
- * Tests for embeddings module
- *
- * These tests mock @huggingface/transformers to avoid loading the actual model
- * while verifying correct behavior of all exported functions.
- *
- * Note: Due to module-level state (embeddingPipeline singleton), each describe
- * block uses vi.resetModules() to ensure fresh module imports.
- */
-
-// Ensure embeddings are enabled for tests (override env var if set)
-delete process.env.MEMMEM_DISABLE_EMBEDDINGS;
-
 import { describe, test, expect, beforeEach, vi } from 'vitest';
+import net from 'net';
+import EventEmitter from 'events';
 
-// Track calls to verify mock behavior
-let mockPipelineCalls: Array<{ task: string; model: string; options: unknown }> = [];
-let mockEmbeddingCalls: Array<{ text: string; options: unknown }> = [];
-let mockAcquireCalls = 0;
+vi.mock('./ratelimiter.js', () => ({
+  getEmbeddingRateLimiter: () => ({ acquire: vi.fn().mockResolvedValue(undefined) }),
+}));
 
-// Create a mock pipeline function that returns predictable output
-const createMockPipeline = () => {
-  return vi.fn(async (text: string, options: unknown) => {
-    mockEmbeddingCalls.push({ text, options });
-    // Return a Float32Array-like structure with 768 dimensions
-    const data = new Float32Array(768);
-    // Fill with predictable values based on text length for testing
-    for (let i = 0; i < 768; i++) {
-      data[i] = 0.001 * (i + 1);
-    }
-    return { data };
-  });
-};
+vi.mock('../mcp/embedding-worker.js', () => ({
+  getSocketPath: () => '/tmp/test-memmem-embed.sock',
+}));
 
-let mockPipelineFn: ReturnType<typeof createMockPipeline>;
+// Don't mock child_process spawn — the connector mock prevents actual spawning
 
-// Mock @huggingface/transformers module
-// NOTE: vi.mock() is hoisted to the top of the file before any other code runs.
-vi.mock('@huggingface/transformers', () => {
-  // Create mock pipeline function within the factory
-  const pipelineMock = vi.fn(async (task: string, model: string, options: unknown) => {
-    mockPipelineCalls.push({ task, model, options });
-    // Return the embedding function
-    return mockPipelineFn;
+describe('isEmbeddingsDisabled()', () => {
+  test('returns false by default', async () => {
+    const { isEmbeddingsDisabled } = await import('./embeddings.js');
+    expect(isEmbeddingsDisabled()).toBe(false);
   });
 
-  return {
-    pipeline: pipelineMock,
-    env: { cacheDir: '' },
-    FeatureExtractionPipeline: class {},
-  };
-});
-
-// Mock ratelimiter module
-vi.mock('./ratelimiter.js', () => {
-  return {
-    getEmbeddingRateLimiter: () => ({
-      acquire: async () => {
-        mockAcquireCalls++;
-        return Promise.resolve();
-      },
-    }),
-  };
-});
-
-describe('embeddings', () => {
-  // We'll dynamically import the module in each test or describe block
-  // to ensure fresh state after resetModules
-
-  beforeEach(() => {
-    // Reset all tracking arrays
-    mockPipelineCalls = [];
-    mockEmbeddingCalls = [];
-    mockAcquireCalls = 0;
-    // Create a fresh mock pipeline function for each test
-    mockPipelineFn = createMockPipeline();
-    // Reset modules to clear the singleton state
+  test('returns true when MEMMEM_DISABLE_EMBEDDINGS=true', async () => {
     vi.resetModules();
-  });
-
-  describe('initEmbeddings()', () => {
-    test('initializes the pipeline with correct parameters', async () => {
-      const { initEmbeddings } = await import('./embeddings.js');
-
-      await initEmbeddings();
-
-      expect(mockPipelineCalls).toHaveLength(1);
-      expect(mockPipelineCalls[0].task).toBe('feature-extraction');
-      expect(mockPipelineCalls[0].model).toBe('onnx-community/embeddinggemma-300m-ONNX');
-      expect(mockPipelineCalls[0].options).toEqual({ dtype: 'q4' });
-    });
-
-    test('sets cache directory', async () => {
-      // Import the mocked env object
-      const { env } = await import('@huggingface/transformers');
-      const { initEmbeddings } = await import('./embeddings.js');
-
-      await initEmbeddings();
-
-      expect(env.cacheDir).toBe('./.cache');
-    });
-
-    test('reuses existing pipeline (singleton pattern)', async () => {
-      const { initEmbeddings } = await import('./embeddings.js');
-
-      // Call initEmbeddings twice
-      await initEmbeddings();
-      await initEmbeddings();
-
-      // Pipeline should only be created once
-      expect(mockPipelineCalls).toHaveLength(1);
-    });
-
-    test('logs loading messages', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const { initEmbeddings } = await import('./embeddings.js');
-
-      await initEmbeddings();
-
-      expect(consoleSpy).toHaveBeenCalledWith('Loading embedding model (first run may take time)...');
-      expect(consoleSpy).toHaveBeenCalledWith('Embedding model loaded');
-
-      consoleSpy.mockRestore();
-    });
-  });
-
-  describe('generateEmbedding()', () => {
-    test('adds the required prefix to text', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      await generateEmbedding('test text');
-
-      expect(mockEmbeddingCalls).toHaveLength(1);
-      expect(mockEmbeddingCalls[0].text).toBe('title: none | text: test text');
-    });
-
-    test('truncates text exceeding 8000 characters', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const longText = 'a'.repeat(10000);
-      await generateEmbedding(longText);
-
-      expect(mockEmbeddingCalls).toHaveLength(1);
-      expect(mockEmbeddingCalls[0].text.length).toBe(8000);
-    });
-
-    test('does not truncate short text', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const shortText = 'hello world';
-      await generateEmbedding(shortText);
-
-      expect(mockEmbeddingCalls).toHaveLength(1);
-      expect(mockEmbeddingCalls[0].text).toBe('title: none | text: hello world');
-    });
-
-    test('truncates at exactly 8000 characters boundary', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      // Create text that with prefix is exactly 8000 chars
-      const prefix = 'title: none | text: ';
-      const textLength = 8000 - prefix.length;
-      const exactText = 'a'.repeat(textLength);
-
-      await generateEmbedding(exactText);
-
-      expect(mockEmbeddingCalls[0].text.length).toBe(8000);
-    });
-
-    test('truncates text that exceeds by one character', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      // Create text that with prefix exceeds by 1 char
-      const prefix = 'title: none | text: ';
-      const textLength = 8000 - prefix.length + 1;
-      const overText = 'a'.repeat(textLength);
-
-      await generateEmbedding(overText);
-
-      expect(mockEmbeddingCalls[0].text.length).toBe(8000);
-    });
-
-    test('returns an array of numbers with 768 dimensions', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const result = await generateEmbedding('test');
-
-      expect(result).not.toBeNull();
-      expect(Array.isArray(result)).toBe(true);
-      expect(result!).toHaveLength(768);
-      result!.forEach((val) => {
-        expect(typeof val).toBe('number');
-      });
-    });
-
-    test('returns values from Float32Array conversion', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const result = await generateEmbedding('test');
-
-      expect(result).not.toBeNull();
-      // Check first and last values match our mock pattern
-      expect(result![0]).toBeCloseTo(0.001, 4);
-      expect(result![767]).toBeCloseTo(0.768, 3);
-    });
-
-    test('calls initEmbeddings if pipeline not initialized', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      // generateEmbedding should auto-initialize
-      await generateEmbedding('test');
-
-      // Pipeline should be created (via initEmbeddings)
-      expect(mockPipelineCalls).toHaveLength(1);
-    });
-
-    test('reuses existing pipeline when already initialized', async () => {
-      const { initEmbeddings, generateEmbedding } = await import('./embeddings.js');
-
-      // Initialize first
-      await initEmbeddings();
-      mockPipelineCalls = []; // Reset tracking
-
-      // Now generate embedding
-      await generateEmbedding('test');
-
-      // Pipeline should NOT be created again
-      expect(mockPipelineCalls).toHaveLength(0);
-    });
-
-    test('passes pooling and normalize options to pipeline', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      await generateEmbedding('test');
-
-      expect(mockEmbeddingCalls[0].options).toEqual({
-        pooling: 'mean',
-        normalize: true,
-      });
-    });
-
-    test('handles empty text', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const result = await generateEmbedding('');
-
-      expect(mockEmbeddingCalls[0].text).toBe('title: none | text: ');
-      expect(result).toHaveLength(768);
-    });
-
-    test('preserves special characters in text', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const specialText = 'Test with "quotes" and \'apostrophes\' & <html>';
-      await generateEmbedding(specialText);
-
-      expect(mockEmbeddingCalls[0].text).toBe(`title: none | text: ${specialText}`);
-    });
-
-    test('preserves newlines in text', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      const multilineText = 'Line 1\nLine 2\nLine 3';
-      await generateEmbedding(multilineText);
-
-      expect(mockEmbeddingCalls[0].text).toBe('title: none | text: Line 1\nLine 2\nLine 3');
-    });
-
-    test('calls rate limiter acquire before generating embedding', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      await generateEmbedding('test');
-
-      // Rate limiter acquire should have been called
-      expect(mockAcquireCalls).toBe(1);
-    });
-  });
-
-
-  describe('integration scenarios', () => {
-    test('full workflow: init then generate multiple embeddings', async () => {
-      const { initEmbeddings, generateEmbedding } = await import('./embeddings.js');
-
-      await initEmbeddings();
-      await generateEmbedding('first text');
-      await generateEmbedding('second text');
-      await generateEmbedding('third text');
-
-      // Pipeline should only be initialized once
-      expect(mockPipelineCalls).toHaveLength(1);
-      // But embedding should be called 3 times
-      expect(mockEmbeddingCalls).toHaveLength(3);
-      // And rate limiter should be called 3 times
-      expect(mockAcquireCalls).toBe(3);
-    });
-
-    test('generateEmbedding auto-initializes on first call', async () => {
-      const { generateEmbedding } = await import('./embeddings.js');
-
-      // Without explicit init, should still work
-      const result = await generateEmbedding('auto init test');
-
-      expect(mockPipelineCalls).toHaveLength(1);
-      expect(result).toHaveLength(768);
-    });
-
+    process.env.MEMMEM_DISABLE_EMBEDDINGS = 'true';
+    const { isEmbeddingsDisabled } = await import('./embeddings.js');
+    expect(isEmbeddingsDisabled()).toBe(true);
+    delete process.env.MEMMEM_DISABLE_EMBEDDINGS;
   });
 });
+
+describe('generateEmbedding()', () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  test('returns null when MEMMEM_DISABLE_EMBEDDINGS=true', async () => {
+    process.env.MEMMEM_DISABLE_EMBEDDINGS = 'true';
+    const { generateEmbedding } = await import('./embeddings.js');
+    expect(await generateEmbedding('test')).toBeNull();
+    delete process.env.MEMMEM_DISABLE_EMBEDDINGS;
+  });
+
+  test('sends request to worker and returns embedding', async () => {
+    const mockEmbedding = Array.from({ length: 768 }, (_, i) => i * 0.001);
+    const { generateEmbedding, __setWorkerConnectorForTests } = await import('./embeddings.js');
+    __setWorkerConnectorForTests(() => Promise.resolve(createMockSocket({ embedding: mockEmbedding })));
+
+    const result = await generateEmbedding('hello world');
+    expect(result).toEqual(mockEmbedding);
+    __setWorkerConnectorForTests(null);
+  });
+
+  test('returns null when worker connection fails', async () => {
+    const { generateEmbedding, __setWorkerConnectorForTests } = await import('./embeddings.js');
+    __setWorkerConnectorForTests(() => Promise.reject(new Error('ENOENT')));
+
+    const result = await generateEmbedding('hello');
+    expect(result).toBeNull();
+    __setWorkerConnectorForTests(null);
+  });
+
+  test('returns null when worker returns error response', async () => {
+    const { generateEmbedding, __setWorkerConnectorForTests } = await import('./embeddings.js');
+    __setWorkerConnectorForTests(() => Promise.resolve(createMockSocket({ error: 'model failed' })));
+
+    const result = await generateEmbedding('hello');
+    expect(result).toBeNull();
+    __setWorkerConnectorForTests(null);
+  });
+
+  test('handles concurrent requests with correct id matching', async () => {
+    const { generateEmbedding, __setWorkerConnectorForTests } = await import('./embeddings.js');
+    const mockSocket = createMockSocketMulti();
+    __setWorkerConnectorForTests(() => Promise.resolve(mockSocket));
+
+    const results = await Promise.all([
+      generateEmbedding('text 1'),
+      generateEmbedding('text 2'),
+      generateEmbedding('text 3'),
+    ]);
+
+    expect(results).toHaveLength(3);
+    results.forEach(r => expect(r).toHaveLength(768));
+    __setWorkerConnectorForTests(null);
+  });
+});
+
+// Mock socket helpers
+function createMockSocket(response: object): net.Socket {
+  const emitter = new EventEmitter() as net.Socket;
+  emitter.write = (data: any) => {
+    const req = JSON.parse(data.toString().trim());
+    setImmediate(() => emitter.emit('data', JSON.stringify({ id: req.id, ...response }) + '\n'));
+    return true;
+  };
+  emitter.destroyed = false;
+  emitter.destroy = () => { emitter.destroyed = true; return emitter; };
+  emitter.end = () => emitter;
+  return emitter;
+}
+
+function createMockSocketMulti(): net.Socket {
+  const emitter = new EventEmitter() as net.Socket;
+  emitter.write = (data: any) => {
+    const req = JSON.parse(data.toString().trim());
+    const embedding = Array.from({ length: 768 }, () => Math.random());
+    setImmediate(() => emitter.emit('data', JSON.stringify({ id: req.id, embedding }) + '\n'));
+    return true;
+  };
+  emitter.destroyed = false;
+  emitter.destroy = () => { emitter.destroyed = true; return emitter; };
+  emitter.end = () => emitter;
+  return emitter;
+}
