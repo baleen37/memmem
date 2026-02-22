@@ -10,7 +10,11 @@ import net from 'net';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { getSocketPath } from '../mcp/embedding-worker.js';
+import { getSuperpowersDir } from './paths.js';
+
+function getSocketPath(): string {
+  return path.join(getSuperpowersDir(), 'embedding-worker.sock');
+}
 
 export function isEmbeddingsDisabled(): boolean {
   return process.env.MEMMEM_DISABLE_EMBEDDINGS === 'true';

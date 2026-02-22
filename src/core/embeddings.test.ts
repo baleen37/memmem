@@ -6,8 +6,8 @@ vi.mock('./ratelimiter.js', () => ({
   getEmbeddingRateLimiter: () => ({ acquire: vi.fn().mockResolvedValue(undefined) }),
 }));
 
-vi.mock('../mcp/embedding-worker.js', () => ({
-  getSocketPath: () => '/tmp/test-memmem-embed.sock',
+vi.mock('./paths.js', () => ({
+  getSuperpowersDir: () => '/tmp/test-memmem-embed',
 }));
 
 // Don't mock child_process spawn — the connector mock prevents actual spawning
