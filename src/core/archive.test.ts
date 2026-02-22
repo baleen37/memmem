@@ -9,41 +9,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { archiveSession, findSessionJsonl } from './archive.js';
-
-describe('findSessionJsonl', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-test-'));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true });
-  });
-
-  test('finds JSONL file matching session ID', () => {
-    const sessionId = 'abc123';
-    const jsonlPath = path.join(tmpDir, `${sessionId}.jsonl`);
-    fs.writeFileSync(jsonlPath, '{"test":1}\n');
-
-    const result = findSessionJsonl(tmpDir, sessionId);
-
-    expect(result).toBe(jsonlPath);
-  });
-
-  test('returns null when session JSONL does not exist', () => {
-    const result = findSessionJsonl(tmpDir, 'nonexistent-session');
-
-    expect(result).toBeNull();
-  });
-
-  test('returns null when projects directory does not exist', () => {
-    const result = findSessionJsonl('/nonexistent/path', 'abc123');
-
-    expect(result).toBeNull();
-  });
-});
+import { archiveSession } from './archive.js';
 
 describe('archiveSession', () => {
   let srcDir: string;

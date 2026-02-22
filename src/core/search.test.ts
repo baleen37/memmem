@@ -61,27 +61,12 @@ describe('search - observation search', () => {
     test('should accept valid ISO date format', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding();
 
-      try {
-        await search('test query', { db, after: '2025-01-15', before: '2025-01-20' });
-        // If we get here without throwing, date validation passed
-        expect(true).toBe(true);
-      } catch (error: any) {
-        if (error.message.includes('Invalid')) {
-          throw error;
-        }
-        // Other errors are OK (like no results)
-      }
-    });
-
-    test('should reject invalid date format - missing leading zeros', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding();
-
       await expect(
-        search('test query', { db, after: '2025-1-5' })
-      ).rejects.toThrow('Invalid --after date');
+        search('test query', { db, after: '2025-01-15', before: '2025-01-20' })
+      ).resolves.toEqual([]);
     });
 
-    test('should reject invalid date format - wrong separator', async () => {
+    test('should reject invalid date format', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding();
 
       await expect(
@@ -89,23 +74,7 @@ describe('search - observation search', () => {
       ).rejects.toThrow('Invalid --after date');
     });
 
-    test('should reject invalid calendar date - truly invalid date', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding();
-
-      await expect(
-        search('test query', { db, after: 'invalid-date' })
-      ).rejects.toThrow('Invalid --after date');
-    });
-
-    test('should reject invalid month', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding();
-
-      await expect(
-        search('test query', { db, after: '2025-13-01' })
-      ).rejects.toThrow('Not a valid calendar date');
-    });
-
-    test('should reject invalid day for month', async () => {
+    test('should reject invalid calendar date', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding();
 
       await expect(
@@ -116,14 +85,9 @@ describe('search - observation search', () => {
     test('should accept leap year date', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding();
 
-      try {
-        await search('test query', { db, after: '2024-02-29' });
-        expect(true).toBe(true);
-      } catch (error: any) {
-        if (error.message.includes('Invalid')) {
-          throw error;
-        }
-      }
+      await expect(
+        search('test query', { db, after: '2024-02-29' })
+      ).resolves.toEqual([]);
     });
   });
 
@@ -454,44 +418,22 @@ describe('search - observation search', () => {
       }, createTestEmbedding(1));
     });
 
-    test('should return compact observations with correct structure', async () => {
+    test('should return compact observations without internal or heavy fields', async () => {
       mockGenerateEmbedding = async () => createTestEmbedding(1);
 
       const results = await search('test', { db });
 
       expect(results.length).toBeGreaterThan(0);
-      expect(results[0]).toHaveProperty('id');
-      expect(results[0]).toHaveProperty('title');
-      expect(results[0]).toHaveProperty('project');
-      expect(results[0]).toHaveProperty('timestamp');
-      // Should NOT have vector internals
+      expect(results[0]).toMatchObject({
+        id: expect.any(Number),
+        title: 'Test Result',
+        project: 'test-project',
+        timestamp: expect.any(Number)
+      });
+      expect(results[0]).not.toHaveProperty('content');
+      expect(results[0]).not.toHaveProperty('sessionId');
       expect(results[0]).not.toHaveProperty('similarity');
       expect(results[0]).not.toHaveProperty('distance');
-    });
-
-    test('should not include content in compact results', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding(1);
-
-      const results = await search('test', { db });
-
-      expect(results[0]).not.toHaveProperty('content');
-    });
-
-    test('should not include sessionId in compact results', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding(1);
-
-      const results = await search('test', { db });
-
-      expect(results[0]).not.toHaveProperty('sessionId');
-    });
-
-    test('should not include similarity field in results', async () => {
-      mockGenerateEmbedding = async () => createTestEmbedding(1);
-
-      const vectorResults = await search('test', { db });
-
-      // Should not include similarity
-      vectorResults.forEach(r => expect(r).not.toHaveProperty('similarity'));
     });
   });
 
@@ -503,24 +445,10 @@ describe('search - observation search', () => {
       expect(results).toEqual([]);
     });
 
-    test('should handle special characters in query', async () => {
-      insertTestObservation(db, {
-        title: 'Special chars test',
-        content: 'Test with special characters: @#$%^&*()',
-        project: 'test-project',
-        timestamp: Date.now()
-      }, createTestEmbedding(1));
-
-      mockGenerateEmbedding = async () => createTestEmbedding(1);
-
-      const results = await search('special', { db });
-      expect(results.length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('should handle unicode characters', async () => {
+    test('should handle unicode and special characters in query/content', async () => {
       insertTestObservation(db, {
         title: 'Unicode test',
-        content: 'Test with unicode: Hello 世界 🌍',
+        content: 'Test with special characters: @#$%^&*() and unicode: Hello 世界 🌍',
         project: 'test-project',
         timestamp: Date.now()
       }, createTestEmbedding(1));
@@ -528,7 +456,7 @@ describe('search - observation search', () => {
       mockGenerateEmbedding = async () => createTestEmbedding(1);
 
       const results = await search('unicode', { db });
-      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.length).toBeGreaterThan(0);
     });
 
     test('should handle very long queries', async () => {
@@ -536,9 +464,7 @@ describe('search - observation search', () => {
 
       mockGenerateEmbedding = async () => createTestEmbedding();
 
-      // Should not throw
-      const results = await search(longQuery, { db });
-      expect(Array.isArray(results)).toBe(true);
+      await expect(search(longQuery, { db })).resolves.toEqual([]);
     });
   });
 

@@ -95,7 +95,7 @@ export async function startWorker(sockPath: string): Promise<net.Server | null> 
 }
 
 // Entrypoint guard (same pattern as mcp/server.ts)
-export function shouldRunAsEntrypoint(): boolean {
+function shouldRunAsEntrypoint(): boolean {
   return process.env.VITEST !== 'true';
 }
 
