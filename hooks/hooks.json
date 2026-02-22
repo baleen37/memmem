@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/cli.mjs inject",
+            "command": "PLUGIN_ROOT=\"${CLAUDE_PLUGIN_ROOT:-$(sh \"$HOME/.claude/cpr.sh\" memmem@baleen-marketplace)}\"; node \"$PLUGIN_ROOT/dist/cli.mjs\" inject",
             "timeout": 1000
           }
         ]
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/cli.mjs observe",
+            "command": "PLUGIN_ROOT=\"${CLAUDE_PLUGIN_ROOT:-$(sh \"$HOME/.claude/cpr.sh\" memmem@baleen-marketplace)}\"; node \"$PLUGIN_ROOT/dist/cli.mjs\" observe",
             "async": true
           }
         ]
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/cli.mjs observe --summarize",
+            "command": "PLUGIN_ROOT=\"${CLAUDE_PLUGIN_ROOT:-$(sh \"$HOME/.claude/cpr.sh\" memmem@baleen-marketplace)}\"; node \"$PLUGIN_ROOT/dist/cli.mjs\" observe --summarize",
             "async": true
           }
         ]
