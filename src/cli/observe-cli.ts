@@ -36,10 +36,11 @@ function readStdin(): Promise<string> {
 }
 
 /**
- * Get session ID from environment.
+ * Get session ID from stdin JSON first, then environment variables.
+ * Claude Code injects session_id into the hook stdin JSON payload.
  */
-function getSessionId(): string {
-  return process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
+function getSessionId(stdinSessionId?: string): string {
+  return stdinSessionId || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
 }
 
 /**
@@ -65,10 +66,10 @@ function getProjectSlug(): string | undefined {
 /**
  * Handle PostToolUse hook.
  */
-async function handleObserve(toolName: string, toolInput: unknown, toolResponse: unknown): Promise<void> {
+async function handleObserve(toolName: string, toolInput: unknown, toolResponse: unknown, stdinSessionId?: string): Promise<void> {
   const db = openDatabase();
   try {
-    const sessionId = getSessionId();
+    const sessionId = getSessionId(stdinSessionId);
     const project = getProject();
 
     // Merge tool_input and tool_response for compression
@@ -90,10 +91,10 @@ async function handleObserve(toolName: string, toolInput: unknown, toolResponse:
 /**
  * Handle Stop hook with summarization.
  */
-async function handleSummarize(): Promise<void> {
+async function handleSummarize(stdinSessionId?: string): Promise<void> {
   const db = openDatabase();
   try {
-    const sessionId = getSessionId();
+    const sessionId = getSessionId(stdinSessionId);
     const project = getProject();
 
     // Load LLM config
@@ -123,20 +124,23 @@ async function main() {
     const command = process.argv[2];
     const shouldSummarize = command === '--summarize' || process.argv.includes('--summarize');
 
+    // Read stdin for both PostToolUse and Stop hooks
+    // Both hook types include session_id in their stdin JSON payload
+    const stdinData = await readStdin();
+
     if (shouldSummarize) {
       // Stop hook - extract observations from pending events
-      await handleSummarize();
+      const stdinSessionId = stdinData.trim() ? (JSON.parse(stdinData) as { session_id?: string }).session_id : undefined;
+      await handleSummarize(stdinSessionId);
     } else {
       // PostToolUse hook - compress and store tool event
-      const stdinData = await readStdin();
-
       // Handle empty stdin (hook might not send data for all tools)
       if (!stdinData.trim()) {
         return;
       }
 
       const input = JSON.parse(stdinData) as PostToolUseInput;
-      await handleObserve(input.tool_name, input.tool_input, input.tool_response);
+      await handleObserve(input.tool_name, input.tool_input, input.tool_response, input.session_id);
     }
   } catch (error) {
     // Silent failure for async hooks to avoid disrupting session

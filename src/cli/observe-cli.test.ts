@@ -333,6 +333,62 @@ describe('Observe CLI', () => {
       expect(input.tool_response).toEqual({ lines: 100 });
     });
 
+    test('should use session_id from stdin JSON when env var is absent', () => {
+      delete process.env.CLAUDE_SESSION_ID;
+      delete process.env.CLAUDE_SESSION;
+
+      const stdinInput = {
+        tool_name: 'Read',
+        tool_input: { file_path: '/src/test.ts' },
+        tool_response: { lines: 100 },
+        session_id: 'session-from-stdin-12345',
+      };
+
+      // The session ID should come from stdin when env vars are absent
+      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
+      expect(sessionId).toBe('session-from-stdin-12345');
+    });
+
+    test('should prefer stdin session_id over env var', () => {
+      process.env.CLAUDE_SESSION_ID = 'env-session-id';
+
+      const stdinInput = {
+        tool_name: 'Read',
+        tool_input: { file_path: '/src/test.ts' },
+        tool_response: { lines: 100 },
+        session_id: 'stdin-session-id',
+      };
+
+      // stdin session_id should take priority
+      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || 'unknown';
+      expect(sessionId).toBe('stdin-session-id');
+    });
+
+    test('should pass stdin session_id to handlePostToolUse', () => {
+      delete process.env.CLAUDE_SESSION_ID;
+      delete process.env.CLAUDE_SESSION;
+
+      (handlePostToolUse as ReturnType<typeof vi.fn>).mockImplementation(() => {});
+
+      const stdinInput = {
+        tool_name: 'Read',
+        tool_input: { file_path: '/src/test.ts' },
+        tool_response: { lines: 100 },
+        session_id: 'real-session-from-claude-code',
+      };
+
+      const sessionId = stdinInput.session_id || process.env.CLAUDE_SESSION_ID || 'unknown';
+      handlePostToolUse(mockDb, sessionId, 'default', stdinInput.tool_name, stdinInput.tool_input);
+
+      expect(handlePostToolUse).toHaveBeenCalledWith(
+        mockDb,
+        'real-session-from-claude-code',
+        'default',
+        'Read',
+        { file_path: '/src/test.ts' },
+      );
+    });
+
     test('should handle various tool types', () => {
       const toolInputs = [
         { tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_response: { exitCode: 0 } },
@@ -356,6 +412,21 @@ describe('Observe CLI', () => {
 
       const shouldSummarize = process.argv.includes('--summarize');
       expect(shouldSummarize).toBe(true);
+    });
+
+    test('should use session_id from Stop hook stdin', () => {
+      delete process.env.CLAUDE_SESSION_ID;
+      delete process.env.CLAUDE_SESSION;
+
+      // Claude Code Stop hook sends session_id in stdin JSON
+      const stopStdinInput = {
+        session_id: 'stop-hook-session-abc123',
+        transcript_path: '/Users/jito.hello/.claude/projects/proj/stop-hook-session-abc123.jsonl',
+        hook_event_name: 'Stop',
+      };
+
+      const sessionId = stopStdinInput.session_id || process.env.CLAUDE_SESSION_ID || 'unknown';
+      expect(sessionId).toBe('stop-hook-session-abc123');
     });
 
     test('should load LLM config when present', () => {

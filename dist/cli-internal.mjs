@@ -2348,8 +2348,8 @@ function readStdin2() {
     process.stdin.on("end", () => resolve(data));
   });
 }
-function getSessionId() {
-  return process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || "unknown";
+function getSessionId(stdinSessionId) {
+  return stdinSessionId || process.env.CLAUDE_SESSION_ID || process.env.CLAUDE_SESSION || "unknown";
 }
 function getProject2() {
   return process.env.CLAUDE_PROJECT || process.env.CLAUDE_PROJECT_NAME || "default";
@@ -2361,10 +2361,10 @@ function getProjectSlug() {
   }
   return projectDir.replace(/[/.]/g, "-");
 }
-async function handleObserve(toolName, toolInput, toolResponse) {
+async function handleObserve(toolName, toolInput, toolResponse, stdinSessionId) {
   const db = openDatabase();
   try {
-    const sessionId = getSessionId();
+    const sessionId = getSessionId(stdinSessionId);
     const project = getProject2();
     const mergedData = {
       ...toolInput && typeof toolInput === "object" ? toolInput : {},
@@ -2377,10 +2377,10 @@ async function handleObserve(toolName, toolInput, toolResponse) {
     db.close();
   }
 }
-async function handleSummarize() {
+async function handleSummarize(stdinSessionId) {
   const db = openDatabase();
   try {
-    const sessionId = getSessionId();
+    const sessionId = getSessionId(stdinSessionId);
     const project = getProject2();
     const config = loadConfig();
     if (!config) {
@@ -2402,15 +2402,16 @@ async function main2() {
   try {
     const command2 = process.argv[2];
     const shouldSummarize = command2 === "--summarize" || process.argv.includes("--summarize");
+    const stdinData = await readStdin2();
     if (shouldSummarize) {
-      await handleSummarize();
+      const stdinSessionId = stdinData.trim() ? JSON.parse(stdinData).session_id : void 0;
+      await handleSummarize(stdinSessionId);
     } else {
-      const stdinData = await readStdin2();
       if (!stdinData.trim()) {
         return;
       }
       const input = JSON.parse(stdinData);
-      await handleObserve(input.tool_name, input.tool_input, input.tool_response);
+      await handleObserve(input.tool_name, input.tool_input, input.tool_response, input.session_id);
     }
   } catch (error) {
     console.error(`[memmem] Error in observe: ${error instanceof Error ? error.message : String(error)}`);
