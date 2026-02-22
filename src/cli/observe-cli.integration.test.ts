@@ -22,8 +22,8 @@ describe('observe-cli session_id integration', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memmem-test-'));
     dbPath = path.join(tempDir, 'conversations.db');
-    // Initialize the DB schema
-    const db = initDatabase(dbPath);
+    // Initialize the DB schema (uses MEMMEM_DB_PATH env var set in test)
+    const db = initDatabase();
     db.close();
   });
 
